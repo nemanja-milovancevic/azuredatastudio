@@ -9,18 +9,30 @@ import * as vscode from 'vscode';
 import { sqlProviderName } from '../constants';
 import { generateUuid } from 'vscode-languageclient/lib/utils/uuid';
 
+type TableType = 'Regular' | 'GraphNode' | 'GraphEdge';
+
+async function openNewTableDesigner(context: azdata.ObjectExplorerContext, tableType: TableType): Promise<void> {
+	const connectionString = await azdata.connection.getConnectionString(context.connectionProfile.id, true);
+	await azdata.designers.openTableDesigner(sqlProviderName, {
+		server: context.connectionProfile.serverName,
+		database: context.connectionProfile.databaseName,
+		isNewTable: true,
+		id: generateUuid(),
+		connectionString: connectionString,
+		tableType: tableType
+	});
+}
+
 export function registerTableDesignerCommands(appContext: AppContext) {
 	appContext.extensionContext.subscriptions.push(vscode.commands.registerCommand('mssql.newTable', async (context: azdata.ObjectExplorerContext) => {
-		const connectionString = await azdata.connection.getConnectionString(context.connectionProfile.id, true);
-		await azdata.designers.openTableDesigner(sqlProviderName, {
-			server: context.connectionProfile.serverName,
-			database: context.connectionProfile.databaseName,
-			isNewTable: true,
-			id: generateUuid(),
-			connectionString: connectionString
-		});
+		await openNewTableDesigner(context, 'Regular');
 	}));
-
+	appContext.extensionContext.subscriptions.push(vscode.commands.registerCommand('mssql.newGraphEdgeTable', async (context: azdata.ObjectExplorerContext) => {
+		await openNewTableDesigner(context, 'GraphEdge');
+	}));
+	appContext.extensionContext.subscriptions.push(vscode.commands.registerCommand('mssql.newGraphNodeTable', async (context: azdata.ObjectExplorerContext) => {
+		await openNewTableDesigner(context, 'GraphNode');
+	}));
 	appContext.extensionContext.subscriptions.push(vscode.commands.registerCommand('mssql.designTable', async (context: azdata.ObjectExplorerContext) => {
 		const server = context.connectionProfile.serverName;
 		const database = context.connectionProfile.databaseName;

@@ -142,6 +142,16 @@
         "command": "mssql.designTable",
         "category": "MSSQL",
         "title": "%title.designTable%"
+      },
+      {
+        "command": "mssql.newGraphNodeTable",
+        "category": "MSSQL",
+        "title": "%title.newGraphNodeTable%"
+      },
+      {
+        "command": "mssql.newGraphEdgeTable",
+        "category": "MSSQL",
+        "title": "%title.newGraphEdgeTable%"
       }
     ],
     "outputChannels": [
@@ -451,6 +461,14 @@
         {
           "command": "mssql.designTable",
           "when": "false"
+        },
+        {
+          "command": "mssql.newGraphNodeTable",
+          "when": "false"
+        },
+        {
+          "command": "mssql.newGraphEdgeTable",
+          "when": "false"
         }
       ],
       "objectExplorer/item/context": [
@@ -503,6 +521,18 @@
           "command": "mssql.designTable",
           "when": "connectionProvider == MSSQL && nodeType == Table && config.tableDesigner.enableFeature",
           "group": "0_query@3"
+        },
+        {
+          "command": "mssql.newTable",
+          "when": "connectionProvider == MSSQL && nodeType == Folder && nodePath =~/\/Tables$/"
+        },
+        {
+          "command": "mssql.newGraphNodeTable",
+          "when": "connectionProvider == MSSQL && nodeType == Folder && nodePath =~/\/Tables$/"
+        },
+        {
+          "command": "mssql.newGraphEdgeTable",
+          "when": "connectionProvider == MSSQL && nodeType == Folder && nodePath =~/\/Tables$/"
         }
       ],
       "notebook/toolbar": [
