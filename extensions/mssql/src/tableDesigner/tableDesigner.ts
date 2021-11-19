@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { sqlProviderName } from '../constants';
 import { generateUuid } from 'vscode-languageclient/lib/utils/uuid';
 
-type TableType = 'Regular' | 'GraphNode' | 'GraphEdge';
+type TableType = 'Regular' | 'Node' | 'Edge';
 
 async function openNewTableDesigner(context: azdata.ObjectExplorerContext, tableType: TableType): Promise<void> {
 	const connectionString = await azdata.connection.getConnectionString(context.connectionProfile.id, true);
@@ -28,10 +28,10 @@ export function registerTableDesignerCommands(appContext: AppContext) {
 		await openNewTableDesigner(context, 'Regular');
 	}));
 	appContext.extensionContext.subscriptions.push(vscode.commands.registerCommand('mssql.newGraphEdgeTable', async (context: azdata.ObjectExplorerContext) => {
-		await openNewTableDesigner(context, 'GraphEdge');
+		await openNewTableDesigner(context, 'Edge');
 	}));
 	appContext.extensionContext.subscriptions.push(vscode.commands.registerCommand('mssql.newGraphNodeTable', async (context: azdata.ObjectExplorerContext) => {
-		await openNewTableDesigner(context, 'GraphNode');
+		await openNewTableDesigner(context, 'Node');
 	}));
 	appContext.extensionContext.subscriptions.push(vscode.commands.registerCommand('mssql.designTable', async (context: azdata.ObjectExplorerContext) => {
 		const server = context.connectionProfile.serverName;
