@@ -80,8 +80,11 @@ export class Table<T extends Slick.SlickData> extends Widget implements IDisposa
 		this._container = document.createElement('div');
 		this._container.className = 'monaco-table';
 		this._register(DOM.addDisposableListener(this._container, DOM.EventType.FOCUS, (e: FocusEvent) => {
-			// Focus redirection should only happen when the event target is the container (using keyboard navigation)
-			if (e.target && this._container === e.target && this._data.getLength() > 0) {
+			// The focus redirection logic should only be executed when all following conditions are met
+			// 1. the focus target is the table container element (using keyboard navigation or click the table header or scrollbars)
+			// 2. there are data to be displayed
+			// 3. currently there are no focusable cells in the table
+			if (e.target && this._container === e.target && this._data.getLength() > 0 && !this._container.querySelector('[tabindex = "0"]')) {
 				let cellToFocus = this.grid.getActiveCell();
 				if (!cellToFocus) {
 					// When the table receives focus and there are currently no active cell, the focus should go to the first focusable cell.
