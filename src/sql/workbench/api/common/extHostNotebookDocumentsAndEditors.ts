@@ -57,11 +57,13 @@ export class ExtHostNotebookDocumentsAndEditors implements ExtHostNotebookDocume
 	private readonly _onDidOpenVSCodeNotebook = new Emitter<vscode.NotebookDocument>();
 	private readonly _onDidCloseVSCodeNotebook = new Emitter<vscode.NotebookDocument>();
 	private readonly _onDidChangeVSCodeCellMetadata = new Emitter<vscode.NotebookCellMetadataChangeEvent>();
+	private readonly _onDidChangeVSCodeDocumentMetadata = new Emitter<vscode.NotebookDocumentMetadataChangeEvent>();
 	readonly onDidChangeVisibleVSCodeEditors: Event<vscode.NotebookEditor[]> = this._onDidChangeVisibleVSCodeEditors.event;
 	readonly onDidChangeActiveVSCodeEditor: Event<vscode.NotebookEditor> = this._onDidChangeActiveVSCodeEditor.event;
 	readonly onDidOpenVSCodeNotebookDocument: Event<vscode.NotebookDocument> = this._onDidOpenVSCodeNotebook.event;
 	readonly onDidCloseVSCodeNotebookDocument: Event<vscode.NotebookDocument> = this._onDidCloseVSCodeNotebook.event;
 	readonly onDidChangeVSCodeCellMetadata: Event<vscode.NotebookCellMetadataChangeEvent> = this._onDidChangeVSCodeCellMetadata.event;
+	readonly onDidChangeVSCodeDocumentMetadata: Event<vscode.NotebookDocumentMetadataChangeEvent> = this._onDidChangeVSCodeDocumentMetadata.event;
 
 	constructor(
 		private readonly _mainContext: IMainContext,
@@ -174,12 +176,16 @@ export class ExtHostNotebookDocumentsAndEditors implements ExtHostNotebookDocume
 				notebook: data.document,
 				kind: e.changeKind
 			});
-			if (e.changeKind === NotebookChangeKind.MetadataUpdated) {
+			if (e.changeKind === NotebookChangeKind.CellMetadataUpdated) {
 				e.cells.forEach((cell, index) => {
 					this._onDidChangeVSCodeCellMetadata.fire({
 						cell: convertToVSCodeNotebookCell(cell.contents.source, index, uri, data.document.kernelSpec?.language),
 						document: new VSCodeNotebookDocument(data.document)
 					});
+				});
+			} else if (e.changeKind === NotebookChangeKind.DocumentMetadataUpdated) {
+				this._onDidChangeVSCodeDocumentMetadata.fire({
+					document: new VSCodeNotebookDocument(data.document)
 				});
 			}
 		}

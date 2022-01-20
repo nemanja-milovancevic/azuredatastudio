@@ -898,9 +898,10 @@ export enum ActionOnCellCheckboxCheck {
 
 export enum NotebookChangeKind {
 	ContentUpdated = 0,
-	MetadataUpdated = 1,
+	CellMetadataUpdated = 1,
 	Save = 2,
-	CellExecuted = 3
+	CellExecuted = 3,
+	DocumentMetadataUpdated = 4
 }
 
 export type QueryEventType =
