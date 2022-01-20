@@ -23,6 +23,8 @@ import { ExtHostNotebookDocumentData } from 'sql/workbench/api/common/extHostNot
 import { ExtHostNotebookEditor } from 'sql/workbench/api/common/extHostNotebookEditor';
 import { VSCodeNotebookDocument } from 'sql/workbench/api/common/notebooks/vscodeNotebookDocument';
 import { VSCodeNotebookEditor } from 'sql/workbench/api/common/notebooks/vscodeNotebookEditor';
+import { NotebookChangeKind } from 'sql/workbench/api/common/sqlExtHostTypes';
+import { convertToVSCodeNotebookCell } from 'sql/workbench/api/common/notebooks/notebookUtils';
 
 type Adapter = azdata.nb.NavigationProvider;
 
@@ -54,10 +56,12 @@ export class ExtHostNotebookDocumentsAndEditors implements ExtHostNotebookDocume
 	private readonly _onDidChangeActiveVSCodeEditor = new Emitter<vscode.NotebookEditor>();
 	private readonly _onDidOpenVSCodeNotebook = new Emitter<vscode.NotebookDocument>();
 	private readonly _onDidCloseVSCodeNotebook = new Emitter<vscode.NotebookDocument>();
+	private readonly _onDidChangeVSCodeCellMetadata = new Emitter<vscode.NotebookCellMetadataChangeEvent>();
 	readonly onDidChangeVisibleVSCodeEditors: Event<vscode.NotebookEditor[]> = this._onDidChangeVisibleVSCodeEditors.event;
 	readonly onDidChangeActiveVSCodeEditor: Event<vscode.NotebookEditor> = this._onDidChangeActiveVSCodeEditor.event;
 	readonly onDidOpenVSCodeNotebookDocument: Event<vscode.NotebookDocument> = this._onDidOpenVSCodeNotebook.event;
 	readonly onDidCloseVSCodeNotebookDocument: Event<vscode.NotebookDocument> = this._onDidCloseVSCodeNotebook.event;
+	readonly onDidChangeVSCodeCellMetadata: Event<vscode.NotebookCellMetadataChangeEvent> = this._onDidChangeVSCodeCellMetadata.event;
 
 	constructor(
 		private readonly _mainContext: IMainContext,
@@ -170,6 +174,14 @@ export class ExtHostNotebookDocumentsAndEditors implements ExtHostNotebookDocume
 				notebook: data.document,
 				kind: e.changeKind
 			});
+			if (e.changeKind === NotebookChangeKind.MetadataUpdated) {
+				e.cells.forEach((cell, index) => {
+					this._onDidChangeVSCodeCellMetadata.fire({
+						cell: convertToVSCodeNotebookCell(cell.contents.source, index, uri, data.document.kernelSpec?.language),
+						document: new VSCodeNotebookDocument(data.document)
+					});
+				});
+			}
 		}
 	}
 

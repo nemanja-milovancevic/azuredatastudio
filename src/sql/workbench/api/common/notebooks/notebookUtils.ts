@@ -12,7 +12,7 @@ import { OutputTypes } from 'sql/workbench/services/notebook/common/contracts';
 import { NBFORMAT, NBFORMAT_MINOR } from 'sql/workbench/common/constants';
 import { NotebookCellKind } from 'vs/workbench/api/common/extHostTypes';
 
-export function convertToVSCodeNotebookCell(cellSource: string | string[], index: number, uri: URI, language: string): vscode.NotebookCell {
+export function convertToVSCodeNotebookCell(cellSource: string | string[], index: number, uri: URI, language: string | undefined): vscode.NotebookCell {
 	return <vscode.NotebookCell>{
 		index: index,
 		document: <vscode.TextDocument>{

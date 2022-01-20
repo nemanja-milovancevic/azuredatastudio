@@ -1206,10 +1206,8 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor, ex
 				// return extHostNotebook.onDidChangeCellOutputs(listener, thisArgs, disposables);
 			},
 			onDidChangeCellMetadata(listener, thisArgs?, disposables?) {
-				// {{SQL CARBON EDIT}} Disable VS Code notebooks
-				throw new Error(functionalityNotSupportedError);
-				// checkProposedApiEnabled(extension);
-				// return extHostNotebook.onDidChangeCellMetadata(listener, thisArgs, disposables);
+				// {{SQL CARBON EDIT}} Use our own notebooks
+				return extHostNotebookDocumentsAndEditors.onDidChangeVSCodeCellMetadata(listener, thisArgs, disposables);
 			},
 			createConcatTextDocument(notebook, selector) {
 				// {{SQL CARBON EDIT}} Disable VS Code notebooks
