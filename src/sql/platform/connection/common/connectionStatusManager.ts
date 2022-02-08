@@ -222,7 +222,7 @@ export class ConnectionStatusManager {
 	}
 
 	public isDefaultTypeUri(uri: string): boolean {
-		return !!(uri && uri.startsWith(Utils.uriPrefixes.default));
+		return !!(uri && (uri.startsWith(Utils.uriPrefixes.default) || uri.startsWith(Utils.uriPrefixes.dashboard)));
 	}
 
 	public getProviderIdFromUri(ownerUri: string): string {
