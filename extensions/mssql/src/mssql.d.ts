@@ -49,6 +49,11 @@ declare module 'mssql' {
 		readonly sqlAssessment: ISqlAssessmentService;
 
 		readonly sqlMigration: ISqlMigrationService;
+<<<<<<< HEAD
+=======
+
+		readonly blob: IBlobService;
+>>>>>>> f023bb0c06 (Relocated createSas RPC from sql-dataprotocolclient to the mssql)
 	}
 
 	/**
@@ -619,4 +624,15 @@ declare module 'mssql' {
 	export interface ISqlMigrationService {
 		getAssessments(ownerUri: string, databases: string[]): Promise<AssessmentResult | undefined>;
 	}
+<<<<<<< HEAD
+=======
+
+
+	export interface IBlobService {
+		/**
+		* Create shared access signature for blob container
+		*/
+		createSas(connectionUri: string, blobContainerUri: string, blobStorageKey: string, storageAccountName: string, expirationDate: string): Thenable<azdata.CreateSasResponse>;
+	}
+>>>>>>> f023bb0c06 (Relocated createSas RPC from sql-dataprotocolclient to the mssql)
 }

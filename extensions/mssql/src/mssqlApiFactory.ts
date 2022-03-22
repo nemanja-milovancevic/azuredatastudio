@@ -4,7 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AppContext } from './appContext';
+<<<<<<< HEAD
 import { IExtension, ICmsService, IDacFxService, ISchemaCompareService, MssqlObjectExplorerBrowser, ILanguageExtensionService, ISqlAssessmentService, ISqlMigrationService } from 'mssql';
+=======
+import { IExtension, ICmsService, IDacFxService, ISchemaCompareService, MssqlObjectExplorerBrowser, ILanguageExtensionService, ISqlAssessmentService, ISqlMigrationService, IBlobService } from 'mssql';
+>>>>>>> f023bb0c06 (Relocated createSas RPC from sql-dataprotocolclient to the mssql)
 import * as constants from './constants';
 import { MssqlObjectExplorerNodeProvider } from './objectExplorerNodeProvider/objectExplorerNodeProvider';
 import * as azdata from 'azdata';
@@ -40,6 +44,9 @@ export function createMssqlApi(context: AppContext, sqlToolsServer: SqlToolsServ
 		},
 		get sqlMigration() {
 			return context.getService<ISqlMigrationService>(constants.SqlMigrationService);
+		},
+		get blob() {
+			return context.getService<IBlobService>(constants.BlobService);
 		}
 	};
 }
