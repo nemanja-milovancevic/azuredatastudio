@@ -717,10 +717,7 @@ export const SqlMainContext = {
 	MainThreadNotebookDocumentsAndEditors: createMainId<MainThreadNotebookDocumentsAndEditorsShape>('MainThreadNotebookDocumentsAndEditors'),
 	MainThreadExtensionManagement: createMainId<MainThreadExtensionManagementShape>('MainThreadExtensionManagement'),
 	MainThreadWorkspace: createMainId<MainThreadWorkspaceShape>('MainThreadWorkspace'),
-<<<<<<< HEAD
-=======
 	MainThreadAzureBlob: createMainId<MainThreadAzureBlobShape>('MainThreadAzureBlob'),
->>>>>>> f023bb0c06 (Relocated createSas RPC from sql-dataprotocolclient to the mssql)
 };
 
 export const SqlExtHostContext = {
@@ -743,10 +740,7 @@ export const SqlExtHostContext = {
 	ExtHostNotebookDocumentsAndEditors: createExtId<ExtHostNotebookDocumentsAndEditorsShape>('ExtHostNotebookDocumentsAndEditors'),
 	ExtHostExtensionManagement: createExtId<ExtHostExtensionManagementShape>('ExtHostExtensionManagement'),
 	ExtHostWorkspace: createExtId<ExtHostWorkspaceShape>('ExtHostWorkspace'),
-<<<<<<< HEAD
-=======
 	ExtHostAzureBlob: createExtId<ExtHostAzureBlobShape>('ExtHostAzureBlob')
->>>>>>> f023bb0c06 (Relocated createSas RPC from sql-dataprotocolclient to the mssql)
 };
 
 export interface MainThreadDashboardShape extends IDisposable {
