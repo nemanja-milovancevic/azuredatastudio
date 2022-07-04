@@ -4047,7 +4047,7 @@
 								},
 								{
 									"assetType": "Microsoft.VisualStudio.Services.Icons.Default",
-									"source": "https://raw.githubusercontent.com/microsoft/azuredatastudio/main/extensions/sql-migration/images/extension.png"
+									"source": "https://github.com/nemanja-milovancevic/azuredatastudio/blob/main/extensions/sql-migration/images/novaIkona.png?raw=true"
 								},
 								{
 									"assetType": "Microsoft.VisualStudio.Services.Content.Details",
