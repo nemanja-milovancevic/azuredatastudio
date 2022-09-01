@@ -7,7 +7,7 @@ import { localize } from 'vs/nls';
 import { IDisposable, Disposable } from 'vs/base/common/lifecycle';
 import { Emitter } from 'vs/base/common/event';
 import { URI } from 'vs/base/common/uri';
-import { GroupIdentifier, IRevertOptions, ISaveOptions, IEditorInput, EditorInputCapabilities } from 'vs/workbench/common/editor';
+import { GroupIdentifier, IRevertOptions, ISaveOptions, EditorInputCapabilities } from 'vs/workbench/common/editor';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 
 import { IConnectionManagementService, IConnectableInput, INewConnectionParams, RunQueryOnConnectionMode } from 'sql/platform/connection/common/connectionManagement';
@@ -41,6 +41,7 @@ export interface IQueryEditorStateChange {
 	executingChange?: boolean;
 	connectingChange?: boolean;
 	sqlCmdModeChanged?: boolean;
+	actualExecutionPlanModeChanged?: boolean;
 }
 
 export class QueryEditorState extends Disposable {
@@ -49,6 +50,7 @@ export class QueryEditorState extends Disposable {
 	private _resultsVisible = false;
 	private _executing = false;
 	private _connecting = false;
+	private _isActualExecutionPlanMode = false;
 
 	private _onChange = this._register(new Emitter<IQueryEditorStateChange>());
 	public onChange = this._onChange.event;
@@ -108,12 +110,24 @@ export class QueryEditorState extends Disposable {
 		return this._isSqlCmdMode;
 	}
 
+	public set isActualExecutionPlanMode(val: boolean) {
+		if (val !== this._isActualExecutionPlanMode) {
+			this._isActualExecutionPlanMode = val;
+			this._onChange.fire({ actualExecutionPlanModeChanged: true });
+		}
+	}
+
+	public get isActualExecutionPlanMode() {
+		return this._isActualExecutionPlanMode;
+	}
+
 	public setState(newState: QueryEditorState): void {
 		this.connected = newState.connected;
 		this.connecting = newState.connecting;
 		this.resultsVisible = newState.resultsVisible;
 		this.executing = newState.executing;
 		this.isSqlCmdMode = newState.isSqlCmdMode;
+		this.isActualExecutionPlanMode = newState.isActualExecutionPlanMode;
 	}
 }
 
@@ -243,7 +257,7 @@ export abstract class QueryEditorInput extends EditorInput implements IConnectab
 		}
 	}
 
-	override save(group: GroupIdentifier, options?: ISaveOptions): Promise<IEditorInput | undefined> {
+	override save(group: GroupIdentifier, options?: ISaveOptions): Promise<EditorInput | undefined> {
 		return this.text.save(group, options);
 	}
 

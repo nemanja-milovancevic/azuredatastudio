@@ -19,9 +19,10 @@ const extensionList = [
 	'dacpac',
 	'data-workspace',
 	'import',
+	'machine-learning',
 	//'mssql',
 	'notebook',
-	'machine-learning',
+	'query-history',
 	'resource-deployment',
 	'schema-compare',
 	'sql-bindings',
@@ -80,6 +81,7 @@ for (const ext of argv.extensions) {
 		console.log(execSync(command, { stdio: 'inherit'}));
 	} else {
 		const env = {
+			...process.env,
 			VSCODE_CLI: 1,
 			ELECTRON_ENABLE_STACK_DUMPING: 1,
 			ELECTRON_ENABLE_LOGGING: 1

@@ -148,11 +148,13 @@
 			"managePackages.backgroundInstallFailed": "L'installation de {0} {1} a échoué. Erreur : {2}",
 			"managePackages.backgroundInstallStarted": "Installation de {0} {1}",
 			"managePackages.installButtonText": "Installer",
+			"managePackages.installCompleteText": "Package installé",
+			"managePackages.installProgressText": "Installation du package",
 			"managePackages.invalidTextPlaceholder": "N/A",
 			"managePackages.noVersionsFound": "Les versions valides du package spécifié sont introuvables",
 			"managePackages.packageNameTitle": "Nom du package",
 			"managePackages.packageSummaryTitle": "Récapitulatif du package",
-			"managePackages.packageVersionTitle": "Version du package",
+			"managePackages.packageVersionTitle": "Versions de package prises en charge pour Python {0}",
 			"managePackages.searchBarPlaceholder": "Rechercher dans les packages {0}",
 			"managePackages.searchButtonLabel": "Recherche"
 		},
@@ -168,7 +170,9 @@
 			"managePackages.packageCount": "{0} {1} packages",
 			"managePackages.packageType": "Type de package",
 			"managePackages.pkgNameColumn": "Nom",
-			"managePackages.uninstallButtonText": "Désinstaller les packages sélectionnés"
+			"managePackages.uninstallButtonText": "Désinstaller les packages sélectionnés",
+			"managePackages.uninstallCompleteText": "Paquet désinstallé",
+			"managePackages.uninstallProgressText": "Désinstallation du package"
 		},
 		"dist/dialog/managePackages/managePackagesDialog": {
 			"managePackages.cancelButtonText": "Fermer",

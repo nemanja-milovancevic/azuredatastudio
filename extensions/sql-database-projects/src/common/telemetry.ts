@@ -16,6 +16,7 @@ export enum TelemetryViews {
 	ProjectController = 'ProjectController',
 	SqlProjectPublishDialog = 'SqlProjectPublishDialog',
 	ProjectTree = 'ProjectTree',
+	PublishOptionsDialog = 'PublishOptionsDialog'
 }
 
 export enum TelemetryActions {
@@ -39,5 +40,10 @@ export enum TelemetryActions {
 	createProjectFromDatabase = 'createProjectFromDatabase',
 	updateProjectFromDatabase = 'updateProjectFromDatabase',
 	publishToContainer = 'publishToContainer',
-	generateProjectFromOpenApiSpec = 'generateProjectFromOpenApiSpec'
+	publishToNewAzureServer = 'publishToNewAzureServer',
+	generateProjectFromOpenApiSpec = 'generateProjectFromOpenApiSpec',
+	publishOptionsOpened = 'publishOptionsOpened',
+	resetOptions = 'resetOptions',
+	optionsChanged = 'optionsChanged',
+	profileLoaded = 'profileLoaded'
 }

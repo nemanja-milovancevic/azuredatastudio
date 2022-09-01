@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as constants from '../common/constants';
-import { directoryExist } from '../common/utils';
+import { directoryExist, showInfoMessageWithLearnMoreLink } from '../common/utils';
 import { defaultProjectSaveLocation } from '../common/projectLocationHelper';
 import { WorkspaceService } from '../services/workspaceService';
 
@@ -23,8 +23,9 @@ export async function createNewProjectWithQuickpick(workspaceService: WorkspaceS
 			targetPlatforms: projType.targetPlatforms,
 			defaultTargetPlatform: projType.defaultTargetPlatform,
 			sdkOption: projType.sdkStyleOption,
-			sdkLearnMoreUrl: projType.sdkStyleLearnMoreUrl
-		} as vscode.QuickPickItem & { id: string, sdkOption?: boolean, targetPlatforms?: string[], defaultTargetPlatform?: string, sdkLearnMoreUrl?: string };
+			sdkLearnMoreUrl: projType.sdkStyleLearnMoreUrl,
+			learnMoreUrl: projType.learnMoreUrl
+		} as vscode.QuickPickItem & { id: string, sdkOption?: boolean, targetPlatforms?: string[], defaultTargetPlatform?: string, sdkLearnMoreUrl?: string, learnMoreUrl?: string };
 	});
 
 	// 1. Prompt for project type
@@ -48,9 +49,17 @@ export async function createNewProjectWithQuickpick(workspaceService: WorkspaceS
 
 	const defaultProjectSaveLoc = defaultProjectSaveLocation();
 	const browseProjectLocationOptions = [constants.BrowseEllipsisWithIcon];
+
+	// if there's an open folder, add it for easier access. If there are multiple folders in the workspace, default to the first one
+	if (vscode.workspace.workspaceFolders) {
+		browseProjectLocationOptions.unshift(vscode.workspace.workspaceFolders[0].uri.fsPath);
+	}
+
+	// add default project save location if it's been set
 	if (defaultProjectSaveLoc) {
 		browseProjectLocationOptions.unshift(defaultProjectSaveLoc.fsPath);
 	}
+
 	// 3. Prompt for Project location
 	// We validate that the folder doesn't already exist, and if it does keep prompting them to pick a new one
 	let projectLocation = '';
@@ -166,4 +175,10 @@ export async function createNewProjectWithQuickpick(workspaceService: WorkspaceS
 	}
 
 	await workspaceService.createProject(projectName, vscode.Uri.file(projectLocation), projectType.id, targetPlatform, sdkStyle);
+
+	// Add info message with 'learn more' button if project type has a link
+	// for user to learn more about the project type
+	if (projectType.learnMoreUrl && projectType.defaultTargetPlatform) {
+		void showInfoMessageWithLearnMoreLink(constants.LocalDevInfo(projectType.defaultTargetPlatform), projectType.learnMoreUrl);
+	}
 }

@@ -153,160 +153,42 @@ declare module 'mssql' {
 		defaultDeploymentOptions: DeploymentOptions;
 	}
 
-	export interface DeploymentOptions {
-		ignoreTableOptions: boolean;
-		ignoreSemicolonBetweenStatements: boolean;
-		ignoreRouteLifetime: boolean;
-		ignoreRoleMembership: boolean;
-		ignoreQuotedIdentifiers: boolean;
-		ignorePermissions: boolean;
-		ignorePartitionSchemes: boolean;
-		ignoreObjectPlacementOnPartitionScheme: boolean;
-		ignoreNotForReplication: boolean;
-		ignoreLoginSids: boolean;
-		ignoreLockHintsOnIndexes: boolean;
-		ignoreKeywordCasing: boolean;
-		ignoreIndexPadding: boolean;
-		ignoreIndexOptions: boolean;
-		ignoreIncrement: boolean;
-		ignoreIdentitySeed: boolean;
-		ignoreUserSettingsObjects: boolean;
-		ignoreFullTextCatalogFilePath: boolean;
-		ignoreWhitespace: boolean;
-		ignoreWithNocheckOnForeignKeys: boolean;
-		verifyCollationCompatibility: boolean;
-		unmodifiableObjectWarnings: boolean;
-		treatVerificationErrorsAsWarnings: boolean;
-		scriptRefreshModule: boolean;
-		scriptNewConstraintValidation: boolean;
-		scriptFileSize: boolean;
-		scriptDeployStateChecks: boolean;
-		scriptDatabaseOptions: boolean;
-		scriptDatabaseCompatibility: boolean;
-		scriptDatabaseCollation: boolean;
-		runDeploymentPlanExecutors: boolean;
-		registerDataTierApplication: boolean;
-		populateFilesOnFileGroups: boolean;
-		noAlterStatementsToChangeClrTypes: boolean;
-		includeTransactionalScripts: boolean;
-		includeCompositeObjects: boolean;
-		allowUnsafeRowLevelSecurityDataMovement: boolean;
-		ignoreWithNocheckOnCheckConstraints: boolean;
-		ignoreFillFactor: boolean;
-		ignoreFileSize: boolean;
-		ignoreFilegroupPlacement: boolean;
-		doNotAlterReplicatedObjects: boolean;
-		doNotAlterChangeDataCaptureObjects: boolean;
-		disableAndReenableDdlTriggers: boolean;
-		deployDatabaseInSingleUserMode: boolean;
-		createNewDatabase: boolean;
-		compareUsingTargetCollation: boolean;
-		commentOutSetVarDeclarations: boolean;
-		blockWhenDriftDetected: boolean;
-		blockOnPossibleDataLoss: boolean;
-		backupDatabaseBeforeChanges: boolean;
-		allowIncompatiblePlatform: boolean;
-		allowDropBlockingAssemblies: boolean;
-		dropConstraintsNotInSource: boolean;
-		dropDmlTriggersNotInSource: boolean;
-		dropExtendedPropertiesNotInSource: boolean;
-		dropIndexesNotInSource: boolean;
-		ignoreFileAndLogFilePath: boolean;
-		ignoreExtendedProperties: boolean;
-		ignoreDmlTriggerState: boolean;
-		ignoreDmlTriggerOrder: boolean;
-		ignoreDefaultSchema: boolean;
-		ignoreDdlTriggerState: boolean;
-		ignoreDdlTriggerOrder: boolean;
-		ignoreCryptographicProviderFilePath: boolean;
-		verifyDeployment: boolean;
-		ignoreComments: boolean;
-		ignoreColumnCollation: boolean;
-		ignoreAuthorizer: boolean;
-		ignoreAnsiNulls: boolean;
-		generateSmartDefaults: boolean;
-		dropStatisticsNotInSource: boolean;
-		dropRoleMembersNotInSource: boolean;
-		dropPermissionsNotInSource: boolean;
-		dropObjectsNotInSource: boolean;
-		ignoreColumnOrder: boolean;
-		doNotDropObjectTypes: SchemaObjectType[];
-		excludeObjectTypes: SchemaObjectType[];
+	/**
+	* Interface containing deployment options of boolean type
+	*/
+	export interface DacDeployOptionPropertyBoolean {
+		value: boolean;
+		description: string;
+		displayName: string;
 	}
 
 	/**
-	 * Values from <DacFx>\Product\Source\DeploymentApi\ObjectTypes.cs
-	 */
-	export const enum SchemaObjectType {
-		Aggregates = 0,
-		ApplicationRoles = 1,
-		Assemblies = 2,
-		AssemblyFiles = 3,
-		AsymmetricKeys = 4,
-		BrokerPriorities = 5,
-		Certificates = 6,
-		ColumnEncryptionKeys = 7,
-		ColumnMasterKeys = 8,
-		Contracts = 9,
-		DatabaseOptions = 10,
-		DatabaseRoles = 11,
-		DatabaseTriggers = 12,
-		Defaults = 13,
-		ExtendedProperties = 14,
-		ExternalDataSources = 15,
-		ExternalFileFormats = 16,
-		ExternalTables = 17,
-		Filegroups = 18,
-		Files = 19,
-		FileTables = 20,
-		FullTextCatalogs = 21,
-		FullTextStoplists = 22,
-		MessageTypes = 23,
-		PartitionFunctions = 24,
-		PartitionSchemes = 25,
-		Permissions = 26,
-		Queues = 27,
-		RemoteServiceBindings = 28,
-		RoleMembership = 29,
-		Rules = 30,
-		ScalarValuedFunctions = 31,
-		SearchPropertyLists = 32,
-		SecurityPolicies = 33,
-		Sequences = 34,
-		Services = 35,
-		Signatures = 36,
-		StoredProcedures = 37,
-		SymmetricKeys = 38,
-		Synonyms = 39,
-		Tables = 40,
-		TableValuedFunctions = 41,
-		UserDefinedDataTypes = 42,
-		UserDefinedTableTypes = 43,
-		ClrUserDefinedTypes = 44,
-		Users = 45,
-		Views = 46,
-		XmlSchemaCollections = 47,
-		Audits = 48,
-		Credentials = 49,
-		CryptographicProviders = 50,
-		DatabaseAuditSpecifications = 51,
-		DatabaseEncryptionKeys = 52,
-		DatabaseScopedCredentials = 53,
-		Endpoints = 54,
-		ErrorMessages = 55,
-		EventNotifications = 56,
-		EventSessions = 57,
-		LinkedServerLogins = 58,
-		LinkedServers = 59,
-		Logins = 60,
-		MasterKeys = 61,
-		Routes = 62,
-		ServerAuditSpecifications = 63,
-		ServerRoleMembership = 64,
-		ServerRoles = 65,
-		ServerTriggers = 66,
-		ExternalStreams = 67,
-		ExternalStreamingJobs = 68
+	* Interface containing deployment options of string[] type, value property holds enum names (nothing but option name) from <DacFx>\Product\Source\DeploymentApi\ObjectTypes.cs enum
+	*/
+	export interface DacDeployOptionPropertyObject {
+		value: string[];
+		description: string;
+		displayName: string;
+	}
+
+	/*
+	* Interface containing Deployment options from <DacFx>\Source\DeploymentApi\DacDeployOptions.cs
+	* These property names should match with the properties defined in <sqltoolsservice>\src\Microsoft.SqlTools.ServiceLayer\DacFx\Contracts\DeploymentOptions.cs
+	*/
+	export interface DeploymentOptions {
+		excludeObjectTypes: DacDeployOptionPropertyObject;
+		// key will be the boolean option name
+		booleanOptionsDictionary: { [key: string]: DacDeployOptionPropertyBoolean };
+		// key will be the object type enum name (nothing but option name)
+		objectTypesDictionary: { [key: string]: string };
+	}
+
+	/*
+	* Interface containing option value and option name
+	*/
+	export interface IOptionWithValue {
+		optionName: string;
+		checked: boolean;
 	}
 
 	export interface SchemaCompareObjectId {
@@ -364,6 +246,7 @@ declare module 'mssql' {
 		generateDeployPlan(packageFilePath: string, databaseName: string, ownerUri: string, taskExecutionMode: azdata.TaskExecutionMode): Thenable<GenerateDeployPlanResult>;
 		getOptionsFromProfile(profilePath: string): Thenable<DacFxOptionsResult>;
 		validateStreamingJob(packageFilePath: string, createStreamingJobTsql: string): Thenable<ValidateStreamingJobResult>;
+		parseTSqlScript(filePath: string, databaseSchemaProvider: string): Thenable<ParseTSqlScriptResult>;
 	}
 
 	export interface DacFxResult extends azdata.ResultStatus {
@@ -379,6 +262,10 @@ declare module 'mssql' {
 	}
 
 	export interface ValidateStreamingJobResult extends azdata.ResultStatus {
+	}
+
+	export interface ParseTSqlScriptResult {
+		containsCreateTableStatement: boolean;
 	}
 
 	export interface ExportParams {
@@ -651,9 +538,20 @@ declare module 'mssql' {
 
 	export interface SkuRecommendationResult {
 		sqlDbRecommendationResults: PaaSSkuRecommendationResultItem[];
+		sqlDbRecommendationDurationInMs: number;
 		sqlMiRecommendationResults: PaaSSkuRecommendationResultItem[];
+		sqlMiRecommendationDurationInMs: number;
 		sqlVmRecommendationResults: IaaSSkuRecommendationResultItem[];
+		sqlVmRecommendationDurationInMs: number;
+		elasticSqlDbRecommendationResults: PaaSSkuRecommendationResultItem[];
+		elasticSqlDbRecommendationDurationInMs: number;
+		elasticSqlMiRecommendationResults: PaaSSkuRecommendationResultItem[];
+		elasticSqlMiRecommendationDurationInMs: number;
+		elasticSqlVmRecommendationResults: IaaSSkuRecommendationResultItem[];
+		elasticSqlVmRecommendationDurationInMs: number;
 		instanceRequirements: SqlInstanceRequirements;
+		skuRecommendationReportPaths: string[];
+		elasticSkuRecommendationReportPaths: string[];
 	}
 
 	// SKU recommendation enums, mirrored from Microsoft.SqlServer.Migration.SkuRecommendation
@@ -898,6 +796,7 @@ declare module 'mssql' {
 		assessmentResult: ServerAssessmentProperties;
 		rawAssessmentResult: any;
 		errors: ErrorModel[];
+		assessmentReportPath: string;
 	}
 
 	export interface ISqlMigrationService {

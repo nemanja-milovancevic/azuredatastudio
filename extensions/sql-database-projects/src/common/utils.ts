@@ -15,7 +15,7 @@ import * as vscodeMssql from 'vscode-mssql';
 import * as fse from 'fs-extra';
 import * as which from 'which';
 import { promises as fs } from 'fs';
-import { Project } from '../models/project';
+import { ISqlProject } from 'sqldbproj';
 
 export interface ValidationResult {
 	errorMessage: string;
@@ -307,30 +307,33 @@ export async function getVscodeMssqlApi(): Promise<vscodeMssql.IExtension> {
 	return ext.activate();
 }
 
+export type AzureResourceServiceFactory = () => Promise<vscodeMssql.IAzureResourceService>;
+export async function defaultAzureResourceServiceFactory(): Promise<vscodeMssql.IAzureResourceService> {
+	const vscodeMssqlApi = await getVscodeMssqlApi();
+	return vscodeMssqlApi.azureResourceService;
+}
+
+export type AzureAccountServiceFactory = () => Promise<vscodeMssql.IAzureAccountService>;
+export async function defaultAzureAccountServiceFactory(): Promise<vscodeMssql.IAzureAccountService> {
+	const vscodeMssqlApi = await getVscodeMssqlApi();
+	return vscodeMssqlApi.azureAccountService;
+}
+
 /*
  * Returns the default deployment options from DacFx, filtered to appropriate options for the given project.
  */
-export async function getDefaultPublishDeploymentOptions(project: Project): Promise<mssql.DeploymentOptions | vscodeMssql.DeploymentOptions> {
+export async function getDefaultPublishDeploymentOptions(project: ISqlProject): Promise<mssql.DeploymentOptions | vscodeMssql.DeploymentOptions> {
 	const schemaCompareService = await getSchemaCompareService();
 	const result = await schemaCompareService.schemaCompareGetDefaultOptions();
-	const deploymentOptions = result.defaultDeploymentOptions;
-	// re-include database-scoped credentials
-	if (getAzdataApi()) {
-		deploymentOptions.excludeObjectTypes = (deploymentOptions as mssql.DeploymentOptions).excludeObjectTypes.filter(x => x !== mssql.SchemaObjectType.DatabaseScopedCredentials);
-	} else {
-		deploymentOptions.excludeObjectTypes = (deploymentOptions as vscodeMssql.DeploymentOptions).excludeObjectTypes.filter(x => x !== vscodeMssql.SchemaObjectType.DatabaseScopedCredentials);
-	}
-
 	// this option needs to be true for same database references validation to work
 	if (project.databaseReferences.length > 0) {
-		deploymentOptions.includeCompositeObjects = true;
+		result.defaultDeploymentOptions.booleanOptionsDictionary.includeCompositeObjects.value = true;
 	}
 	return result.defaultDeploymentOptions;
 }
 
 export interface IPackageInfo {
 	name: string;
-	fullName: string;
 	version: string;
 	aiKey: string;
 }
@@ -340,16 +343,23 @@ export function getPackageInfo(packageJson?: any): IPackageInfo | undefined {
 		packageJson = require('../../package.json');
 	}
 
-	if (packageJson) {
-		return {
-			name: packageJson.name,
-			fullName: `${packageJson.publisher}.${packageJson.name}`,
-			version: packageJson.version,
-			aiKey: packageJson.aiKey
-		};
+	const vscodePackageJson = require('../../package.vscode.json');
+	const azdataApi = getAzdataApi();
+
+	if (!packageJson || !azdataApi && !vscodePackageJson) {
+		return undefined;
 	}
 
-	return undefined;
+	// When the extension is compiled and packaged, the content of package.json get copied here in the extension.js. This happens before the
+	// package.vscode.json values replace the corresponding values in the package.json for the sql-database-projects-vscode extension
+	// so we need to read these values directly from the package.vscode.json to get the correct extension and publisher names
+	const extensionName = azdataApi ? packageJson.name : vscodePackageJson.name;
+
+	return {
+		name: extensionName,
+		version: packageJson.version,
+		aiKey: packageJson.aiKey
+	};
 }
 
 /**
@@ -441,7 +451,7 @@ export async function retry<T>(
 			}
 
 		} catch (err) {
-			outputChannel.appendLine(constants.retryMessage(name, err));
+			outputChannel.appendLine(constants.retryMessage(name, getErrorMessage(err)));
 		}
 	}
 
@@ -628,4 +638,76 @@ export function getWellKnownDatabaseSources(databaseSourceValues: string[]): str
 	}
 
 	return Array.from(databaseSourceSet);
+}
+
+/**
+ * Returns SQL version number from docker image name which is in the beginning of the image name
+ * @param imageName docker image name
+ * @returns SQL server version
+ */
+export function findSqlVersionInImageName(imageName: string): number | undefined {
+
+	// Regex to find the version in the beginning of the image name
+	// e.g. 2017-CU16-ubuntu, 2019-latest
+	const regex = new RegExp('^([0-9]+)[-].+$');
+
+	if (regex.test(imageName)) {
+		const finds = regex.exec(imageName);
+		if (finds) {
+
+			// 0 is the full match and 1 is the number with pattern inside the first ()
+			return +finds[1];
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Returns SQL version number from target platform name
+ * @param targetPlatform target platform
+ * @returns SQL server version
+ */
+export function findSqlVersionInTargetPlatform(targetPlatform: string): number | undefined {
+
+	// Regex to find the version in target platform
+	// e.g. SQL Server 2019
+	const regex = new RegExp('([0-9]+)$');
+
+	if (regex.test(targetPlatform)) {
+		const finds = regex.exec(targetPlatform);
+		if (finds) {
+
+			// 0 is the full match and 1 is the number with pattern inside the first ()
+			return +finds[1];
+		}
+	}
+	return undefined;
+}
+
+export function throwIfNotConnected(connectionResult: azdataType.ConnectionResult): void {
+	if (!connectionResult.connected) {
+		throw new Error(`${connectionResult.errorMessage} (${connectionResult.errorCode})`);
+	}
+}
+
+/**
+ * Checks whether or not the provided file contains a create table statement
+ * @param fullPath full path to file to check
+ * @param projectTargetVersion target version of sql project containing this file
+ * @returns true if file includes a create table statement, false if it doesn't
+ */
+export async function fileContainsCreateTableStatement(fullPath: string, projectTargetVersion: string): Promise<boolean> {
+	let containsCreateTableStatement = false;
+
+	if (getAzdataApi() && await exists(fullPath)) {
+		const dacFxService = await getDacFxService() as mssql.IDacFxService;
+		try {
+			const result = await dacFxService.parseTSqlScript(fullPath, projectTargetVersion);
+			containsCreateTableStatement = result.containsCreateTableStatement;
+		} catch (e) {
+			console.error(getErrorMessage(e));
+		}
+	}
+
+	return containsCreateTableStatement;
 }

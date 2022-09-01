@@ -3,16 +3,18 @@
  *  Licensed under the Source EULA. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IDeploySettings } from '../IDeploySettings';
 import type * as azdataType from 'azdata';
+import { ISqlProjectPublishSettings, ISqlConnectionProperties } from 'sqldbproj';
+import { IAzureAccountSession } from 'vscode-mssql';
 
 export enum AppSettingType {
 	None,
 	AzureFunction
 }
-export interface IDeployProfile {
-	localDbSetting?: ILocalDbSetting;
-	deploySettings?: IDeploySettings;
+
+export interface ISqlDbDeployProfile {
+	sqlDbSetting?: ISqlDbSetting;
+	deploySettings?: ISqlProjectPublishSettings;
 }
 
 export interface IDeployAppIntegrationProfile {
@@ -21,23 +23,20 @@ export interface IDeployAppIntegrationProfile {
 	appSettingType: AppSettingType;
 }
 
-export interface ILocalDbSetting {
-	serverName: string,
-	port: number,
-	userName: string,
-	password: string,
-	dbName: string,
-	dockerBaseImage: string,
-	dockerBaseImageEula: string,
-	connectionRetryTimeout?: number,
-	profileName?: string
+export interface ISqlDbSetting extends ISqlConnectionProperties {
+	session: IAzureAccountSession
+	resourceGroupName: string,
+	location: string
 }
 
 export interface DockerImageInfo {
 	name: string,
 	displayName: string,
-	agreementInfo: AgreementInfo
+	agreementInfo: AgreementInfo,
+	tagsUrl: string,
+	defaultTag: string
 }
 export interface AgreementInfo {
 	link: azdataType.LinkArea;
 }
+

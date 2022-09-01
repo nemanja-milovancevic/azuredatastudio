@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vscode-nls';
+import * as path from 'path';
 import { SqlTargetPlatform } from 'sqldbproj';
 import * as utils from '../common/utils';
 
@@ -76,7 +77,6 @@ export const vscodeOpenCommand = 'vscode.open';
 export const refreshDataWorkspaceCommand = 'dataworkspace.refresh';
 
 // UI Strings
-
 export const dataSourcesNodeName = localize('dataSourcesNodeName', "Data Sources");
 export const databaseReferencesNodeName = localize('databaseReferencesNodeName', "Database References");
 export const sqlConnectionStringFriendly = localize('sqlConnectionStringFriendly', "SQL connection string");
@@ -99,6 +99,7 @@ export const location = localize('location', "Location");
 export const reloadProject = localize('reloadProject', "Would you like to reload your database project?");
 export const learnMore = localize('learnMore', "Learn More");
 export const sdkLearnMoreUrl = 'https://aka.ms/sqlprojsdk';
+export const azureDevOpsLink = 'https://docs.microsoft.com/azure/azure-sql/database/local-dev-experience-overview?view=azuresql';
 export function newObjectNamePrompt(objectType: string) { return localize('newObjectNamePrompt', 'New {0} name:', objectType); }
 export function deleteConfirmation(toDelete: string) { return localize('deleteConfirmation', "Are you sure you want to delete {0}?", toDelete); }
 export function deleteConfirmationContents(toDelete: string) { return localize('deleteConfirmationContents', "Are you sure you want to delete {0} and all of its contents?", toDelete); }
@@ -110,7 +111,6 @@ export function convertToSdkStyleConfirmation(projectName: string) { return loca
 export function updatedToSdkStyleError(projectName: string) { return localize('updatedToSdkStyleError', "Converting the project {0} to SDK-style was unsuccessful. Changes to the .sqlproj have been rolled back.", projectName); }
 
 // Publish dialog strings
-
 export const publishDialogName = localize('publishDialogName', "Publish project");
 export const publish = localize('publish', "Publish");
 export const cancelButtonText = localize('cancelButtonText', "Cancel");
@@ -146,12 +146,37 @@ export const selectDatabase = localize('selectDatabase', "Select database");
 export const done = localize('done', "Done");
 export const nameMustNotBeEmpty = localize('nameMustNotBeEmpty', "Name must not be empty");
 
+// Publish Dialog options
+export const AdvancedOptionsButton = localize('advancedOptionsButton', 'Advanced...');
+export const AdvancedPublishOptions = localize('advancedPublishOptions', 'Advanced Publish Options');
+export const PublishOptions = localize('publishOptions', 'Publish Options');
+export const ExcludeObjectTypeTab = localize('excludeObjectTypes', 'Exclude Object Types');
+export const ResetButton: string = localize('reset', "Reset");
+export const OptionDescription: string = localize('optionDescription', "Option Description");
+export const OptionName: string = localize('optionName', "Option Name");
+export const OptionInclude: string = localize('include', "Include");
+export function OptionNotFoundWarningMessage(label: string) { return localize('optionNotFoundWarningMessage', "label: {0} does not exist in the options value name lookup", label); }
+
 // Deploy
 export const SqlServerName = 'SQL server';
 export const AzureSqlServerName = 'Azure SQL server';
+export const SqlServerDockerImageName = 'Microsoft SQL Server';
+export const SqlServerDocker2022ImageName = 'Microsoft SQL Server 2022 (preview)';
+export const AzureSqlDbFullDockerImageName = 'Azure SQL Database emulator Full';
+export const AzureSqlDbLiteDockerImageName = 'Azure SQL Database emulator Lite';
+export const AzureSqlLogicalServerName = 'Azure SQL logical server';
 export const selectPublishOption = localize('selectPublishOption', "Select where to publish the project to");
+export const defaultQuickPickItem = localize('defaultQuickPickItem', "Default - image defined as default in the container registry");
+export function dockerImagesPlaceHolder(name: string) { return localize('dockerImagesPlaceHolder', 'Use {0} on local arm64/Apple Silicon', name); }
 export function publishToExistingServer(name: string) { return localize('publishToExistingServer', "Publish to an existing {0}", name); }
 export function publishToDockerContainer(name: string) { return localize('publishToDockerContainer', "Publish to new {0} local development container", name); }
+export const publishToAzureEmulator = localize('publishToAzureEmulator', "Publish to new Azure SQL Database emulator");
+export const publishToNewAzureServer = localize('publishToNewAzureServer', "Publish to new Azure SQL logical server");
+export const azureServerName = localize('azureServerName', "Azure SQL server name");
+export const azureSubscription = localize('azureSubscription', "Azure subscription");
+export const resourceGroup = localize('resourceGroup', "Resource group");
+export const azureLocation = localize('location', "Location");
+export const azureAccounts = localize('azureAccounts', "Azure accounts");
 export function enterPortNumber(name: string) { return localize('enterPortNumber', "Enter {0} port number or press enter to use the default value", name); }
 export function serverPortNumber(name: string) { return localize('serverPortNumber', "{0} port number", name); }
 export function serverPassword(name: string) { return localize('serverPassword', "{0} admin password", name); }
@@ -160,23 +185,26 @@ export function baseDockerImage(name: string) { return localize('baseDockerImage
 export const publishTo = localize('publishTo', "Publish Target");
 export const enterConnectionStringEnvName = localize('enterConnectionStringEnvName', "Enter connection string environment variable name");
 export const enterConnectionStringTemplate = localize('enterConnectionStringTemplate', "Enter connection string template");
+export function enterUser(name: string) { return localize('enterUser', "Enter {0} admin user name", name); }
 export function enterPassword(name: string) { return localize('enterPassword', "Enter {0} admin password", name); }
 export function confirmPassword(name: string) { return localize('confirmPassword', "Confirm {0} admin password", name); }
 export function selectBaseImage(name: string) { return localize('selectBaseImage', "Select the base {0} docker image", name); }
+export function selectImageTag(name: string) { return localize('selectImageTag', "Select the image tag or press enter to use the default value", name); }
 export function invalidSQLPasswordMessage(name: string) { return localize('invalidSQLPassword', "{0} password doesn't meet the password complexity requirement. For more information see https://docs.microsoft.com/sql/relational-databases/security/password-policy", name); }
 export function passwordNotMatch(name: string) { return localize('passwordNotMatch', "{0} password doesn't match the confirmation password", name); }
 export const portMustBeNumber = localize('portMustNotBeNumber', "Port must a be number");
 export const valueCannotBeEmpty = localize('valueCannotBeEmpty', "Value cannot be empty");
 export const dockerImageLabelPrefix = 'source=sqldbproject';
 export const dockerImageNamePrefix = 'sqldbproject';
+export const dockerImageDefaultTag = 'latest';
 
 // Publish to Container
 export const eulaAgreementTemplate = localize({ key: 'eulaAgreementTemplate', comment: ['The placeholders are contents of the line and should not be translated.'] }, "I accept the {0}.");
 export function eulaAgreementText(name: string) { return localize({ key: 'eulaAgreementText', comment: ['The placeholders are contents of the line and should not be translated.'] }, "I accept the {0}.", name); }
 export const eulaAgreementTitle = localize('eulaAgreementTitle', "Microsoft SQL Server License Agreement");
 export const edgeEulaAgreementTitle = localize('edgeEulaAgreementTitle', "Microsoft Azure SQL Edge License Agreement");
-export const sqlServerEulaLink = 'https://go.microsoft.com/fwlink/?linkid=857698';
-export const sqlServerEdgeEulaLink = 'https://go.microsoft.com/fwlink/?linkid=2139274';
+export const sqlServerEulaLink = 'https://aka.ms/mcr/osslegalnotice';
+export const sqlServerEdgeEulaLink = 'https://aka.ms/mcr/osslegalnotice';
 export const connectionNamePrefix = 'SQLDbProject';
 export const sqlServerDockerRegistry = 'mcr.microsoft.com';
 export const sqlServerDockerRepository = 'mssql/server';
@@ -205,12 +233,16 @@ export const runningDockerMessage = localize('runningDockerMessage', "Running th
 export function dockerNotRunningError(error: string) { return localize('dockerNotRunningError', "Failed to verify docker. Please make sure docker is installed and running. Error: '{0}'", error || ''); }
 export const dockerContainerNotRunningErrorMessage = localize('dockerContainerNotRunningErrorMessage', "Docker container is not running");
 export const dockerContainerFailedToRunErrorMessage = localize('dockerContainerFailedToRunErrorMessage', "Failed to run the docker container");
-export const connectingToSqlServerMessage = localize('connectingToSqlServerOnDockerMessage', "Connecting to SQL Server");
+export const connectingToSqlServerMessage = localize('connectingToSqlServerMessage', "Connecting to SQL Server");
+export const serverCreated = localize('serverCreated', "Server created");
 export const deployProjectFailedMessage = localize('deployProjectFailedMessage', "Failed to open a connection to the deployed database'");
 export const containerAlreadyExistForProject = localize('containerAlreadyExistForProject', "Containers already exist for this project. Do you want to delete them before deploying a new one?");
 export const checkoutOutputMessage = localize('checkoutOutputMessage', "Check output pane for more details");
+export function creatingAzureSqlServer(name: string): string { return localize('creatingAzureSqlServer', "Creating Azure SQL Server '{0}' ...", name); }
+export function azureSqlServerCreated(name: string): string { return localize('azureSqlServerCreated', "Azure SQL Server '{0}' created", name); }
 export function taskFailedError(taskName: string, err: string): string { return localize('taskFailedError.error', "Failed to complete task '{0}'. Error: {1}", taskName, err); }
 export function publishToContainerFailed(errorMessage: string) { return localize('publishToContainerFailed', "Failed to publish to container. {0}", errorMessage); }
+export function publishToNewAzureServerFailed(errorMessage: string) { return localize('publishToNewAzureServerFailed', "Failed to publish to new Azure SQL server. {0}", errorMessage); }
 export function deployAppSettingUpdateFailed(appSetting: string) { return localize('deployAppSettingUpdateFailed', "Failed to update app setting '{0}'", appSetting); }
 export function deployAppSettingUpdating(appSetting: string) { return localize('deployAppSettingUpdating', "Updating app setting: '{0}'", appSetting); }
 export function connectionFailedError(error: string) { return localize('connectionFailedError', "Connection failed error: '{0}'", error); }
@@ -220,7 +252,7 @@ export function retryWaitMessage(numberOfSeconds: number, name: string) { return
 export function retryRunMessage(attemptNumber: number, numberOfAttempts: number, name: string) { return localize('retryRunMessage', "Running operation '{2}' Attempt {0} of {1}", attemptNumber, numberOfAttempts, name); }
 export function retrySucceedMessage(name: string, result: string) { return localize('retrySucceedMessage', "Operation '{0}' completed successfully. Result: {1}", name, result); }
 export function retryFailedMessage(name: string, result: string, error: string) { return localize('retryFailedMessage', "Operation '{0}' failed. Re-trying... Current Result: {1}. Error: '{2}'", name, result, error); }
-export function retryMessage(name: string, error: string) { return localize('retryMessage', "Operation '{0}' failed. Re-trying... Error: '{1}'", name, error || ''); }
+export function retryMessage(name: string, error: string) { return localize('retryMessage', "Operation '{0}' failed. Re-trying... Error: '{1}' ", name, error); }
 
 // Add Database Reference dialog strings
 
@@ -252,7 +284,6 @@ export const dacpacNotOnSameDrive = (projectLocation: string): string => { retur
 export const referenceType = localize('referenceType', "Reference type");
 
 // Create Project From Database dialog strings
-
 export const createProjectFromDatabaseDialogName = localize('createProjectFromDatabaseDialogName', "Create project from database");
 export const createProjectDialogOkButtonText = localize('createProjectDialogOkButtonText', "Create");
 export const sourceDatabase = localize('sourceDatabase', "Source database");
@@ -425,6 +456,12 @@ export const Type = 'Type';
 export const ExternalStreamingJob: string = 'ExternalStreamingJob';
 export const Sdk: string = 'Sdk';
 export const DatabaseSource = 'DatabaseSource';
+export const VisualStudioVersion = 'VisualStudioVersion';
+export const SSDTExists = 'SSDTExists';
+export const OutputPath = 'OutputPath';
+export const Configuration = 'Configuration';
+export const Platform = 'Platform';
+export const AnyCPU = 'AnyCPU';
 
 export const BuildElements = localize('buildElements', "Build Elements");
 export const FolderElements = localize('folderElements', "Folder Elements");
@@ -462,6 +499,16 @@ export const RoundTripSqlDbPresentCondition = '\'$(NetCoreBuild)\' != \'true\' A
 export const RoundTripSqlDbNotPresentCondition = '\'$(NetCoreBuild)\' != \'true\' AND \'$(SQLDBExtensionsRefPath)\' == \'\'';
 export const DacpacRootPath = '$(DacPacRootPath)';
 export const ProjJsonToClean = '$(BaseIntermediateOutputPath)\\project.assets.json';
+export const EmptyConfigurationCondition = '\'$(Configuration)\' == \'\'';
+export const EmptyPlatformCondition = '\'$(Platform)\' == \'\'';
+export function ConfigurationPlatformCondition(configuration: string, platform: string) { return `'$(Configuration)|$(Platform)' == '${configuration}|${platform}'`; }
+
+export function defaultOutputPath(configuration: string) { return path.join('.', 'bin', configuration); }
+
+// Sqlproj VS property conditions
+export const VSVersionCondition = '\'$(VisualStudioVersion)\' == \'\'';
+export const SsdtExistsCondition = '\'$(SSDTExists)\' == \'\'';
+export const targetsExistsCondition = 'Exists(\'$(MSBuildExtensionsPath)\\Microsoft\\VisualStudio\\v$(VisualStudioVersion)\\SSDT\\Microsoft.Data.Tools.Schema.SqlTasks.targets\')';
 
 // SqlProj Reference Assembly Information
 export const NETFrameworkAssembly = 'Microsoft.NETFramework.ReferenceAssemblies';
@@ -492,6 +539,8 @@ export const integratedAuth = 'Integrated';
 export const azureMfaAuth = 'AzureMFA';
 export const sqlAuth = 'SqlAuth';
 
+export const azureAddAccount = localize('azureAddAccount', "Add an Account...");
+
 // Tree item types
 export enum DatabaseProjectItemType {
 	project = 'databaseProject.itemType.project',
@@ -499,6 +548,7 @@ export enum DatabaseProjectItemType {
 	folder = 'databaseProject.itemType.folder',
 	file = 'databaseProject.itemType.file',
 	externalStreamingJob = 'databaseProject.itemType.file.externalStreamingJob',
+	table = 'databaseProject.itemType.file.table',
 	referencesRoot = 'databaseProject.itemType.referencesRoot',
 	reference = 'databaseProject.itemType.reference',
 	dataSourceRoot = 'databaseProject.itemType.dataSourceRoot',
@@ -538,6 +588,7 @@ export const targetPlatformToVersion: Map<string, string> = new Map<string, stri
 	[SqlTargetPlatform.sqlServer2016, '130'],
 	[SqlTargetPlatform.sqlServer2017, '140'],
 	[SqlTargetPlatform.sqlServer2019, '150'],
+	[SqlTargetPlatform.sqlServer2022, '160'],
 	[SqlTargetPlatform.sqlAzure, 'AzureV12'],
 	[SqlTargetPlatform.sqlDW, 'Dw']
 ]);
@@ -545,7 +596,7 @@ export const targetPlatformToVersion: Map<string, string> = new Map<string, stri
 // DW is special since the system dacpac folder has a different name from the target platform
 export const AzureDwFolder = 'AzureDw';
 
-export const defaultTargetPlatform = SqlTargetPlatform.sqlServer2019;
+export const defaultTargetPlatform = SqlTargetPlatform.sqlServer2019; // TODO: update to 2022 when it's GA
 export const defaultDSP = targetPlatformToVersion.get(defaultTargetPlatform)!;
 
 /**
@@ -560,4 +611,18 @@ export function getTargetPlatformFromVersion(version: string): string {
 export enum PublishTargetType {
 	existingServer = 'existingServer',
 	docker = 'docker',
+	newAzureServer = 'newAzureServer'
 }
+
+export const CollapseProjectNodesKey = 'collapseProjectNodes';
+
+// httpClient
+export const downloadError = localize('downloadError', "Download error");
+export const downloadProgress = localize('downloadProgress', "Download progress");
+export const downloading = localize('downloading', "Downloading");
+
+// buildHelper
+export const downloadingDacFxDlls = localize('downloadingDacFxDlls', "Downloading Microsoft.Build.Sql nuget to get build DLLs");
+export const extractingDacFxDlls = localize('extractingDacFxDlls', "Extracting DacFx build DLLs");
+export function errorDownloading(url: string, error: string) { return localize('errorDownloading', "Error downloading {0}. Error: {1}", url, error); }
+export function errorExtracting(path: string, error: string) { return localize('errorExtracting', "Error extracting files from {0}. Error: {1}", path, error); }

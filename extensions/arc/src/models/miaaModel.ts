@@ -98,7 +98,15 @@ export class MiaaModel extends ResourceModel {
 		this._refreshPromise = new Deferred();
 		try {
 			try {
-				const result = await this._azApi.az.sql.miarc.show(this.info.name, this.controllerModel.info.namespace, this.controllerModel.azAdditionalEnvVars);
+				let result;
+				result = await this._azApi.az.sql.miarc.show(
+					this.info.name,
+					{
+						resourceGroup: undefined,
+						namespace: this.controllerModel.info.namespace
+					},
+					this.controllerModel.azAdditionalEnvVars
+				);
 				this._config = result.stdout;
 				this.configLastUpdated = new Date();
 				this.rpSettings.retentionDays = this._config?.spec?.backup?.retentionPeriodInDays?.toString() ?? '';
@@ -167,7 +175,7 @@ export class MiaaModel extends ResourceModel {
 			if (!result.connected) {
 				throw new Error(result.errorMessage);
 			}
-			this._activeConnectionId = result.connectionId;
+			this._activeConnectionId = result.connectionId!;
 		}
 
 		const provider = azdata.dataprotocol.getProvider<azdata.MetadataProvider>(this._connectionProfile!.providerName, azdata.DataProviderType.MetadataProvider);

@@ -45,6 +45,7 @@ import { IEditorOptions } from 'vs/platform/editor/common/editor';
 import { ITextResourceConfigurationService } from 'vs/editor/common/services/textResourceConfigurationService';
 import { ICapabilitiesService } from 'sql/platform/capabilities/common/capabilitiesService';
 import { ConnectionOptionSpecialType } from 'sql/platform/connection/common/interfaces';
+import { ICodeEditorViewState } from 'vs/editor/common/editorCommon';
 
 const QUERY_EDITOR_VIEW_STATE_PREFERENCE_KEY = 'queryEditorViewState';
 
@@ -69,7 +70,7 @@ export class QueryEditor extends EditorPane {
 
 	private textResourceEditor: TextResourceEditor;
 	private textFileEditor: TextFileEditor;
-	private currentTextEditor: BaseTextEditor;
+	private currentTextEditor: BaseTextEditor<ICodeEditorViewState>;
 
 	private textResourceEditorContainer: HTMLElement;
 	private textFileEditorContainer: HTMLElement;
@@ -96,6 +97,7 @@ export class QueryEditor extends EditorPane {
 	private _actualQueryPlanAction: actions.ActualQueryPlanAction;
 	private _listDatabasesActionItem: actions.ListDatabasesActionItem;
 	private _toggleSqlcmdMode: actions.ToggleSqlCmdModeAction;
+	private _toggleActualExecutionPlanMode: actions.ToggleActualExecutionPlanModeAction;
 	private _exportAsNotebookAction: actions.ExportAsNotebookAction;
 
 	constructor(
@@ -205,6 +207,7 @@ export class QueryEditor extends EditorPane {
 		this._estimatedQueryPlanAction = this.instantiationService.createInstance(actions.EstimatedQueryPlanAction, this);
 		this._actualQueryPlanAction = this.instantiationService.createInstance(actions.ActualQueryPlanAction, this);
 		this._toggleSqlcmdMode = this.instantiationService.createInstance(actions.ToggleSqlCmdModeAction, this, false);
+		this._toggleActualExecutionPlanMode = this.instantiationService.createInstance(actions.ToggleActualExecutionPlanModeAction, this, false);
 		this._exportAsNotebookAction = this.instantiationService.createInstance(actions.ExportAsNotebookAction, this);
 		this.setTaskbarContent();
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
@@ -239,6 +242,10 @@ export class QueryEditor extends EditorPane {
 
 		if (stateChangeEvent.sqlCmdModeChanged) {
 			this._toggleSqlcmdMode.isSqlCmdMode = this.input.state.isSqlCmdMode;
+		}
+
+		if (stateChangeEvent.actualExecutionPlanModeChanged) {
+			this._toggleActualExecutionPlanMode.isActualExecutionPlanMode = this.input.state.isActualExecutionPlanMode;
 		}
 
 		if (stateChangeEvent.connectingChange) {
@@ -322,6 +329,7 @@ export class QueryEditor extends EditorPane {
 			content.push(
 				{ element: Taskbar.createTaskbarSeparator() },
 				{ action: this._estimatedQueryPlanAction },
+				{ action: this._toggleActualExecutionPlanMode },
 				{ action: this._toggleSqlcmdMode },
 				{ action: this._exportAsNotebookAction }
 			);
@@ -367,7 +375,7 @@ export class QueryEditor extends EditorPane {
 
 		this.inputDisposables.clear();
 		this.inputDisposables.add(this.input.state.onChange(c => this.updateState(c)));
-		this.updateState({ connectingChange: true, connectedChange: true, executingChange: true, resultsVisibleChange: true, sqlCmdModeChanged: true });
+		this.updateState({ connectingChange: true, connectedChange: true, executingChange: true, resultsVisibleChange: true, sqlCmdModeChanged: true, actualExecutionPlanModeChanged: true });
 
 		const editorViewState = this.loadTextEditorViewState(this.input.resource);
 
@@ -553,6 +561,14 @@ export class QueryEditor extends EditorPane {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Returns the underlying SQL editor's text selections. Returns undefined if there
+	 * is no selected text.
+	 */
+	public getSelections(): IRange[] | undefined {
+		return this.currentTextEditor?.getControl()?.getSelections();
 	}
 
 	/**

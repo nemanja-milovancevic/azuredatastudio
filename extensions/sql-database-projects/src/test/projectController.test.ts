@@ -30,8 +30,8 @@ import { AddDatabaseReferenceDialog } from '../dialogs/addDatabaseReferenceDialo
 import { IDacpacReferenceSettings } from '../models/IDatabaseReferenceSettings';
 import { CreateProjectFromDatabaseDialog } from '../dialogs/createProjectFromDatabaseDialog';
 import { ImportDataModel } from '../models/api/import';
-import { SqlTargetPlatform } from 'sqldbproj';
-import { SystemDatabaseReferenceProjectEntry, SystemDatabase, EntryType, FileProjectEntry } from '../models/projectEntry';
+import { EntryType, ItemType, SqlTargetPlatform } from 'sqldbproj';
+import { SystemDatabaseReferenceProjectEntry, SystemDatabase, FileProjectEntry } from '../models/projectEntry';
 
 let testContext: TestContext;
 
@@ -96,7 +96,7 @@ describe('ProjectsController', function (): void {
 					const project = new Project('FakePath');
 
 					should(project.files.length).equal(0);
-					await projController.addItemPrompt(new Project('FakePath'), '', templates.script);
+					await projController.addItemPrompt(new Project('FakePath'), '', { itemType: ItemType.script });
 					should(project.files.length).equal(0, 'Expected to return without throwing an exception or adding a file when an empty/undefined name is provided.');
 					should(showErrorMessageSpy.notCalled).be.true('showErrorMessage should not have been called');
 					showInputBoxStub.restore();
@@ -112,9 +112,9 @@ describe('ProjectsController', function (): void {
 				const project = await testUtils.createTestProject(baselines.newProjectFileBaseline);
 
 				should(project.files.length).equal(0, 'There should be no files');
-				await projController.addItemPrompt(project, '', templates.script);
+				await projController.addItemPrompt(project, '', { itemType: ItemType.script });
 				should(project.files.length).equal(1, 'File should be successfully added');
-				await projController.addItemPrompt(project, '', templates.script);
+				await projController.addItemPrompt(project, '', { itemType: ItemType.script });
 				const msg = constants.fileAlreadyExists(tableName);
 				should(spy.calledOnce).be.true('showErrorMessage should have been called exactly once');
 				should(spy.calledWith(msg)).be.true(`showErrorMessage not called with expected message '${msg}' Actual '${spy.getCall(0).args[0]}'`);
@@ -327,13 +327,13 @@ describe('ProjectsController', function (): void {
 
 				sinon.stub(vscode.window, 'showInputBox').resolves(preDeployScriptName);
 				should(project.preDeployScripts.length).equal(0, 'There should be no pre deploy scripts');
-				await projController.addItemPrompt(project, '', templates.preDeployScript);
+				await projController.addItemPrompt(project, '', { itemType: ItemType.preDeployScript });
 				should(project.preDeployScripts.length).equal(1, `Pre deploy script should be successfully added. ${project.preDeployScripts.length}, ${project.files.length}`);
 
 				sinon.restore();
 				sinon.stub(vscode.window, 'showInputBox').resolves(postDeployScriptName);
 				should(project.postDeployScripts.length).equal(0, 'There should be no post deploy scripts');
-				await projController.addItemPrompt(project, '', templates.postDeployScript);
+				await projController.addItemPrompt(project, '', { itemType: ItemType.postDeployScript });
 				should(project.postDeployScripts.length).equal(1, 'Post deploy script should be successfully added');
 			});
 
@@ -366,28 +366,36 @@ describe('ProjectsController', function (): void {
 				let projController = TypeMoq.Mock.ofType(ProjectsController);
 				projController.callBase = true;
 				projController.setup(x => x.getPublishDialog(TypeMoq.It.isAny())).returns(() => publishDialog.object);
-
-				void projController.object.publishProject(new Project('FakePath'));
+				const proj = new Project('FakePath');
+				sinon.stub(proj, 'getProjectTargetVersion').returns('150');
+				void projController.object.publishProject(proj);
 				should(opened).equal(true);
 			});
 
 			it('Callbacks are hooked up and called from Publish dialog', async function (): Promise<void> {
-				const projPath = path.dirname(await testUtils.createTestSqlProjFile(baselines.openProjectFileBaseline));
-				await testUtils.createTestDataSources(baselines.openDataSourcesBaseline, projPath);
-				const proj = new Project(projPath);
+				const projectFile = await testUtils.createTestSqlProjFile(baselines.openProjectFileBaseline)
+				const projFolder = path.dirname(projectFile);
+				await testUtils.createTestDataSources(baselines.openDataSourcesBaseline, projFolder);
+				const proj = await Project.openProject(projectFile);
 
 				const publishHoller = 'hello from callback for publish()';
 				const generateHoller = 'hello from callback for generateScript()';
 
 				let holler = 'nothing';
 
-				let publishDialog = TypeMoq.Mock.ofType(PublishDatabaseDialog, undefined, undefined, proj);
-				publishDialog.callBase = true;
-				publishDialog.setup(x => x.getConnectionUri()).returns(() => Promise.resolve('fake|connection|uri'));
+				const setupPublishDialog = (): PublishDatabaseDialog => {
+					const dialog = new PublishDatabaseDialog(proj);
+					sinon.stub(dialog, 'getConnectionUri').returns(Promise.resolve('fake|connection|uri'));
+					return dialog;
+				};
+
+				let publishDialog = setupPublishDialog();
 
 				let projController = TypeMoq.Mock.ofType(ProjectsController);
 				projController.callBase = true;
-				projController.setup(x => x.getPublishDialog(TypeMoq.It.isAny())).returns(() => publishDialog.object);
+				projController.setup(x => x.getPublishDialog(TypeMoq.It.isAny())).returns(() => {
+					return publishDialog;
+				});
 				projController.setup(x => x.publishOrScriptProject(TypeMoq.It.isAny(), TypeMoq.It.isAny(), true)).returns(() => {
 					holler = publishHoller;
 					return Promise.resolve(undefined);
@@ -397,14 +405,15 @@ describe('ProjectsController', function (): void {
 					holler = generateHoller;
 					return Promise.resolve(undefined);
 				});
-				publishDialog.object.publishToExistingServer = true;
+				publishDialog.publishToExistingServer = true;
 				void projController.object.publishProject(proj);
-				await publishDialog.object.publishClick();
+				await publishDialog.publishClick();
 
 				should(holler).equal(publishHoller, 'executionCallback() is supposed to have been setup and called for Publish scenario');
 
+				publishDialog = setupPublishDialog();
 				void projController.object.publishProject(proj);
-				await publishDialog.object.generateScriptClick();
+				await publishDialog.generateScriptClick();
 
 				should(holler).equal(generateHoller, 'executionCallback() is supposed to have been setup and called for GenerateScript scenario');
 			});
@@ -603,6 +612,11 @@ describe('ProjectsController', function (): void {
 			const dataWorkspaceMock = TypeMoq.Mock.ofType<dataworkspace.IExtension>();
 			dataWorkspaceMock.setup(x => x.getProjectsInWorkspace(TypeMoq.It.isAny(), TypeMoq.It.isAny())).returns(() => Promise.resolve([vscode.Uri.file(project1.projectFilePath), vscode.Uri.file(project2.projectFilePath)]));
 			sinon.stub(vscode.extensions, 'getExtension').returns(<any>{ exports: dataWorkspaceMock.object });
+			sinon.stub(utils, 'getDacFxService').returns(<any>{
+				parseTSqlScript: (_: string, __: string) => {
+					return Promise.resolve({ containsCreateTableStatement: true });
+				}
+			});
 
 			// add project reference from project1 to project2
 			await projController.addDatabaseReferenceCallback(project1, {
@@ -633,7 +647,11 @@ describe('ProjectsController', function (): void {
 			const showErrorMessageSpy = sinon.spy(vscode.window, 'showErrorMessage');
 			const dataWorkspaceMock = TypeMoq.Mock.ofType<dataworkspace.IExtension>();
 			sinon.stub(vscode.extensions, 'getExtension').returns(<any>{ exports: dataWorkspaceMock.object });
-
+			sinon.stub(utils, 'getDacFxService').returns(<any>{
+				parseTSqlScript: (_: string, __: string) => {
+					return Promise.resolve({ containsCreateTableStatement: true });
+				}
+			});
 			// add dacpac reference to something in the same folder
 			should(project1.databaseReferences.length).equal(0, 'There should not be any database references to start with');
 
@@ -739,9 +757,9 @@ async function setupDeleteExcludeTest(proj: Project): Promise<[FileProjectEntry,
 	const scriptEntry = await proj.addScriptItem('UpperFolder/LowerFolder/someScript.sql', 'not a real script');
 	await proj.addScriptItem('UpperFolder/LowerFolder/someOtherScript.sql', 'Also not a real script');
 	await proj.addScriptItem('../anotherScript.sql', 'Also not a real script');
-	const preDeployEntry = await proj.addScriptItem('Script.PreDeployment1.sql', 'pre-deployment stuff', templates.preDeployScript);
-	const noneEntry = await proj.addScriptItem('Script.PreDeployment2.sql', 'more pre-deployment stuff', templates.preDeployScript);
-	const postDeployEntry = await proj.addScriptItem('Script.PostDeployment1.sql', 'post-deployment stuff', templates.postDeployScript);
+	const preDeployEntry = await proj.addScriptItem('Script.PreDeployment1.sql', 'pre-deployment stuff', ItemType.preDeployScript);
+	const noneEntry = await proj.addScriptItem('Script.PreDeployment2.sql', 'more pre-deployment stuff', ItemType.preDeployScript);
+	const postDeployEntry = await proj.addScriptItem('Script.PostDeployment1.sql', 'post-deployment stuff', ItemType.postDeployScript);
 
 	const projTreeRoot = new ProjectRootTreeItem(proj);
 	sinon.stub(vscode.window, 'showWarningMessage').returns(<any>Promise.resolve(constants.yesString));

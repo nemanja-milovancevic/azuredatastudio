@@ -29,6 +29,11 @@ export interface DesignerComponentInput {
 	readonly onRefreshRequested: Event<void>;
 
 	/**
+	 * The event that is triggerd when force submit of the pending edit is requested.
+	 */
+	readonly onSubmitPendingEditRequested: Event<void>;
+
+	/**
 	 * Gets the object type display name.
 	 */
 	readonly objectTypeDisplayName: string;
@@ -51,7 +56,7 @@ export interface DesignerComponentInput {
 	/**
 	 * Start initilizing the designer input object.
 	 */
-	initialize(): void;
+	initialize(): Promise<void>;
 
 	/**
 	 * Start processing the edit made in the designer, the OnEditProcessed event will be fired when the processing is done.
@@ -188,6 +193,14 @@ export interface DesignerTableProperties extends ComponentProperties {
 	 */
 	canRemoveRows?: boolean;
 	/**
+	 * Whether user can move rows from one index to another. The default value is false.
+	 */
+	canMoveRows?: boolean;
+	/**
+	 * Whether user can insert rows at a given index to the table. The default value is false.
+	 */
+	canInsertRows?: boolean;
+	/**
 	 * Whether to show confirmation when user removes a row. The default value is false.
 	 */
 	showRemoveRowConfirmation?: boolean;
@@ -214,7 +227,8 @@ export interface DesignerTableComponentRowData {
 export enum DesignerEditType {
 	Add = 0,
 	Remove = 1,
-	Update = 2
+	Update = 2,
+	Move = 3
 }
 
 export interface DesignerEdit {
@@ -230,7 +244,12 @@ export type DesignerPropertyPath = (string | number)[];
 export const DesignerRootObjectPath: DesignerPropertyPath = [];
 
 export type DesignerIssueSeverity = 'error' | 'warning' | 'information';
-export type DesignerIssue = { description: string, propertyPath?: DesignerPropertyPath, severity: DesignerIssueSeverity };
+export type DesignerIssue = {
+	description: string,
+	propertyPath?: DesignerPropertyPath,
+	severity: DesignerIssueSeverity,
+	moreInfoLink?: string;
+};
 
 export interface DesignerEditResult {
 	isValid: boolean;

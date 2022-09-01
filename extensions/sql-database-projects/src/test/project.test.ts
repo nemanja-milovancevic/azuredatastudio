@@ -8,17 +8,16 @@ import * as path from 'path';
 import * as os from 'os';
 import * as sinon from 'sinon';
 import * as baselines from './baselines/baselines';
-import * as templates from '../templates/templates';
 import * as testUtils from './testUtils';
 import * as constants from '../common/constants';
 
 import { promises as fs } from 'fs';
 import { Project } from '../models/project';
-import { exists, convertSlashesForSqlProj, getWellKnownDatabaseSources } from '../common/utils';
+import { exists, convertSlashesForSqlProj, getWellKnownDatabaseSources, getPlatformSafeFileEntryPath } from '../common/utils';
 import { Uri, window } from 'vscode';
 import { IDacpacReferenceSettings, IProjectReferenceSettings, ISystemDatabaseReferenceSettings } from '../models/IDatabaseReferenceSettings';
-import { SqlTargetPlatform } from 'sqldbproj';
-import { EntryType, SystemDatabaseReferenceProjectEntry, SqlProjectReferenceProjectEntry, SystemDatabase } from '../models/projectEntry';
+import { EntryType, ItemType, SqlTargetPlatform } from 'sqldbproj';
+import { SystemDatabaseReferenceProjectEntry, SqlProjectReferenceProjectEntry, SystemDatabase } from '../models/projectEntry';
 
 let projFilePath: string;
 
@@ -110,7 +109,7 @@ describe('Project: sqlproj content operations', function (): void {
 
 		await project.addFolderItem(folderPath);
 		await project.addScriptItem(scriptPath, scriptContents);
-		await project.addScriptItem(scriptPathTagged, scriptContentsTagged, templates.externalStreamingJob);
+		await project.addScriptItem(scriptPathTagged, scriptContentsTagged, ItemType.externalStreamingJob);
 
 		const newProject = await Project.openProject(projFilePath);
 
@@ -229,7 +228,7 @@ describe('Project: sqlproj content operations', function (): void {
 		const project = await Project.openProject(projFilePath);
 
 		await project.changeTargetPlatform('invalidPlatform');
-		await testUtils.shouldThrowSpecificError(async () => await project.getSystemDacpacUri(constants.masterDacpac), constants.invalidDataSchemaProvider);
+		await testUtils.shouldThrowSpecificError(() => project.getSystemDacpacUri(constants.masterDacpac), constants.invalidDataSchemaProvider);
 	});
 
 	it('Should add system database references correctly', async function (): Promise<void> {
@@ -542,8 +541,8 @@ describe('Project: sqlproj content operations', function (): void {
 		const fileContents = ' ';
 
 		await project.addFolderItem(folderPath);
-		await project.addScriptItem(preDeploymentScriptFilePath, fileContents, templates.preDeployScript);
-		await project.addScriptItem(postDeploymentScriptFilePath, fileContents, templates.postDeployScript);
+		await project.addScriptItem(preDeploymentScriptFilePath, fileContents, ItemType.preDeployScript);
+		await project.addScriptItem(postDeploymentScriptFilePath, fileContents, ItemType.postDeployScript);
 
 		const newProject = await Project.openProject(projFilePath);
 
@@ -565,13 +564,13 @@ describe('Project: sqlproj content operations', function (): void {
 		const fileContents = ' ';
 
 		await project.addFolderItem(folderPath);
-		await project.addScriptItem(preDeploymentScriptFilePath, fileContents, templates.preDeployScript);
-		await project.addScriptItem(postDeploymentScriptFilePath, fileContents, templates.postDeployScript);
+		await project.addScriptItem(preDeploymentScriptFilePath, fileContents, ItemType.preDeployScript);
+		await project.addScriptItem(postDeploymentScriptFilePath, fileContents, ItemType.postDeployScript);
 
-		await project.addScriptItem(preDeploymentScriptFilePath2, fileContents, templates.preDeployScript);
+		await project.addScriptItem(preDeploymentScriptFilePath2, fileContents, ItemType.preDeployScript);
 		should(stub.calledWith(constants.deployScriptExists(constants.PreDeploy))).be.true(`showInformationMessage not called with expected message '${constants.deployScriptExists(constants.PreDeploy)}' Actual '${stub.getCall(0).args[0]}'`);
 
-		await project.addScriptItem(postDeploymentScriptFilePath2, fileContents, templates.postDeployScript);
+		await project.addScriptItem(postDeploymentScriptFilePath2, fileContents, ItemType.postDeployScript);
 		should(stub.calledWith(constants.deployScriptExists(constants.PostDeploy))).be.true(`showInformationMessage not called with expected message '${constants.deployScriptExists(constants.PostDeploy)}' Actual '${stub.getCall(0).args[0]}'`);
 
 		const newProject = await Project.openProject(projFilePath);
@@ -859,6 +858,51 @@ describe('Project: sqlproj content operations', function (): void {
 		should(projFileText.includes('<Build Include="test.sql" />')).equal(true, projFileText);
 		should(projFileText.includes('<None Include="foo\\test.txt" />')).equal(true, projFileText);
 	});
+
+	it('Should read OutputPath from sqlproj if there is one for legacy-style project with Debug configuration', async function (): Promise<void> {
+		projFilePath = await testUtils.createTestSqlProjFile(baselines.openProjectFileBaseline);
+		const project: Project = await Project.openProject(projFilePath);
+
+		should(project.configuration).equal('Debug');
+		should(project.outputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('bin\\Debug\\')));
+		should(project.dacpacOutputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('bin\\Debug\\'), `${project.projectFileName}.dacpac`));
+	});
+
+	it('Should read OutputPath from sqlproj if there is one for legacy-style project with Release configuration', async function (): Promise<void> {
+		projFilePath = await testUtils.createTestSqlProjFile(baselines.openProjectFileReleaseConfigurationBaseline);
+		const project: Project = await Project.openProject(projFilePath);
+
+		should(project.configuration).equal('Release');
+		should(project.outputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('bin\\Release\\')));
+		should(project.dacpacOutputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('bin\\Release\\'), `${project.projectFileName}.dacpac`));
+	});
+
+	it('Should set configuration to Output for legacy-style project with unknown configuration', async function (): Promise<void> {
+		projFilePath = await testUtils.createTestSqlProjFile(baselines.openProjectFileUnknownConfigurationBaseline);
+		const project: Project = await Project.openProject(projFilePath);
+
+		should(project.configuration).equal('Output');
+		should(project.outputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('bin\\Output')));
+		should(project.dacpacOutputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('bin\\Output\\'), `${project.projectFileName}.dacpac`));
+	});
+
+	it('Should set configuration to Output for legacy-style project with unknown configuration', async function (): Promise<void> {
+		projFilePath = await testUtils.createTestSqlProjFile(baselines.openProjectFileSingleOutputPathBaseline);
+		const project: Project = await Project.openProject(projFilePath);
+
+		should(project.configuration).equal('Debug');
+		should(project.outputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('..\\otherFolder')));
+		should(project.dacpacOutputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('..\\otherFolder'), `${project.projectFileName}.dacpac`));
+	});
+
+	it('Should use the last OutputPath in the .sqlproj that matches the conditions', async function (): Promise<void> {
+		projFilePath = await testUtils.createTestSqlProjFile(baselines.openProjectFileMultipleOutputPathBaseline);
+		const project: Project = await Project.openProject(projFilePath);
+
+		should(project.configuration).equal('Debug');
+		should(project.outputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('bin\\other')));
+		should(project.dacpacOutputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('bin\\other'), `${project.projectFileName}.dacpac`));
+	});
 });
 
 describe('Project: sdk style project content operations', function (): void {
@@ -1026,9 +1070,9 @@ describe('Project: sdk style project content operations', function (): void {
 		projFilePath = await testUtils.createTestSqlProjFile(baselines.newSdkStyleProjectSdkNodeBaseline, folderPath);
 
 		const project: Project = await Project.openProject(projFilePath);
-		await project.addScriptItem('Script.PreDeployment1.sql', 'fake contents', templates.preDeployScript);
-		await project.addScriptItem('Script.PreDeployment2.sql', 'fake contents', templates.preDeployScript);
-		await project.addScriptItem('Script.PostDeployment1.sql', 'fake contents', templates.postDeployScript);
+		await project.addScriptItem('Script.PreDeployment1.sql', 'fake contents', ItemType.preDeployScript);
+		await project.addScriptItem('Script.PreDeployment2.sql', 'fake contents', ItemType.preDeployScript);
+		await project.addScriptItem('Script.PostDeployment1.sql', 'fake contents', ItemType.postDeployScript);
 
 		// verify they were added to the sqlproj
 		let projFileText = (await fs.readFile(projFilePath)).toString();
@@ -1119,7 +1163,7 @@ describe('Project: sdk style project content operations', function (): void {
 		const otherFolderPath = 'OtherFolder\\';
 
 		await project.addScriptItem(scriptPath, scriptContents);
-		await project.addScriptItem(scriptPathTagged, scriptContentsTagged, templates.externalStreamingJob);
+		await project.addScriptItem(scriptPathTagged, scriptContentsTagged, ItemType.externalStreamingJob);
 		await project.addScriptItem(outsideFolderScriptPath, outsideFolderScriptContents);
 		await project.addFolderItem(otherFolderPath);
 
@@ -1429,6 +1473,30 @@ describe('Project: sdk style project content operations', function (): void {
 		projFileText = (await fs.readFile(projFilePath)).toString();
 		should(project.projectGuid).not.equal(undefined);
 		should(projFileText.includes(constants.ProjectGuid)).equal(true);
+	});
+
+	it('Should read OutputPath from sqlproj if there is one for SDK-style project', async function (): Promise<void> {
+		projFilePath = await testUtils.createTestSqlProjFile(baselines.openSdkStyleSqlProjectBaseline);
+		const projFileText = (await fs.readFile(projFilePath)).toString();
+
+		// Verify sqlproj has OutputPath
+		should(projFileText.includes(constants.OutputPath)).equal(true);
+
+		const project: Project = await Project.openProject(projFilePath);
+		should(project.outputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('..\\otherFolder')));
+		should(project.dacpacOutputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath('..\\otherFolder'), `${project.projectFileName}.dacpac`));
+	});
+
+	it('Should use default output path if OutputPath is not specified in sqlproj', async function (): Promise<void> {
+		projFilePath = await testUtils.createTestSqlProjFile(baselines.openSdkStyleSqlProjectWithGlobsSpecifiedBaseline);
+		const projFileText = (await fs.readFile(projFilePath)).toString();
+
+		// Verify sqlproj doesn't have OutputPath
+		should(projFileText.includes(constants.OutputPath)).equal(true);
+
+		const project: Project = await Project.openProject(projFilePath);
+		should(project.outputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath(constants.defaultOutputPath(project.configuration.toString()))));
+		should(project.dacpacOutputPath).equal(path.join(getPlatformSafeFileEntryPath(project.projectFolderPath), getPlatformSafeFileEntryPath(constants.defaultOutputPath(project.configuration.toString())), `${project.projectFileName}.dacpac`));
 	});
 
 	it('Should handle adding existing items to project', async function (): Promise<void> {
@@ -1784,6 +1852,9 @@ describe('Project: legacy to SDK-style updates', function (): void {
 		let projFileText = (await fs.readFile(projFilePath)).toString();
 		should(projFileText.includes('<Build Include=')).equal(true, 'sqlproj should have Build Includes before converting');
 		should(projFileText.includes('<Folder Include=')).equal(true, 'sqlproj should have Folder Includes before converting');
+		should(projFileText.includes('<VisualStudioVersion Condition="\'$(VisualStudioVersion)\' == \'\'">')).equal(true, 'sqlproj should have VisualStudioVersion property with empty condition before converting');
+		should(projFileText.includes('<SSDTExists Condition="Exists(\'$(MSBuildExtensionsPath)\\Microsoft\\VisualStudio\\v$(VisualStudioVersion)\\SSDT\\Microsoft.Data.Tools.Schema.SqlTasks.targets\')">')).equal(true, 'sqlproj should have SSDTExists property before converting');
+		should(projFileText.includes('<VisualStudioVersion Condition="\'$(SSDTExists)\' == \'\'">')).equal(true, 'sqlproj should have VisualStudioVersion property with SSDTExists condition before converting');
 
 		await project.convertProjectToSdkStyle();
 
@@ -1796,6 +1867,9 @@ describe('Project: legacy to SDK-style updates', function (): void {
 		should(projFileText.includes('<Folder Include=')).equal(false, 'All Folder Includes should have been removed');
 		should(project.files.filter(f => f.type === EntryType.File).length).equal(beforeFileCount, 'Same number of files should be included after Build Includes are removed');
 		should(project.files.filter(f => f.type === EntryType.Folder).length).equal(beforeFolderCount, 'Same number of folders should be included after Folder Includes are removed');
+		should(projFileText.includes('<VisualStudioVersion Condition="\'$(VisualStudioVersion)\' == \'\'">')).equal(false, 'VisualStudioVersion property with empty condition should be removed');
+		should(projFileText.includes('<SSDTExists Condition="Exists(\'$(MSBuildExtensionsPath)\\Microsoft\\VisualStudio\\v$(VisualStudioVersion)\\SSDT\\Microsoft.Data.Tools.Schema.SqlTasks.targets\')">')).equal(false, 'SSDTExists property should be removed');
+		should(projFileText.includes('<VisualStudioVersion Condition="\'$(SSDTExists)\' == \'\'">')).equal(false, 'VisualStudioVersion property with SSDTExists condition should be removed');
 	});
 
 	it('Should not fail if legacy style project does not have Properties folder in sqlproj', async function (): Promise<void> {

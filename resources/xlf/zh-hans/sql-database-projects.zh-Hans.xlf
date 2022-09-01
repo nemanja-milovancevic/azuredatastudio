@@ -62,6 +62,14 @@
         <source xml:lang="en">Add Item</source>
         <target state="translated">添加项</target>
       </trans-unit>
+      <trans-unit id="advancedOptionsButton">
+        <source xml:lang="en">Advanced...</source>
+        <target state="translated">高级...</target>
+      </trans-unit>
+      <trans-unit id="advancedPublishOptions">
+        <source xml:lang="en">Advanced Publish Options</source>
+        <target state="translated">高级发布选项</target>
+      </trans-unit>
       <trans-unit id="appSettingPrompt">
         <source xml:lang="en">Would you like to update Azure Function local.settings.json with the new connection string?</source>
         <target state="translated">是否要使用新的连接字符串更新 Azure 函数 local.settings.json?</target>
@@ -85,6 +93,26 @@
       <trans-unit id="autorestProjectName">
         <source xml:lang="en">New SQL project name</source>
         <target state="translated">新 SQL 项目名称</target>
+      </trans-unit>
+      <trans-unit id="azureAccounts">
+        <source xml:lang="en">Azure accounts</source>
+        <target state="translated">Azure 帐户</target>
+      </trans-unit>
+      <trans-unit id="azureAddAccount">
+        <source xml:lang="en">Add an Account...</source>
+        <target state="translated">添加帐户...</target>
+      </trans-unit>
+      <trans-unit id="azureServerName">
+        <source xml:lang="en">Azure SQL server name</source>
+        <target state="translated">Azure SQL Server 名称</target>
+      </trans-unit>
+      <trans-unit id="azureSqlServerCreated">
+        <source xml:lang="en">Azure SQL Server '{0}' created</source>
+        <target state="translated">Azure SQL Server “{0}” 已创建</target>
+      </trans-unit>
+      <trans-unit id="azureSubscription">
+        <source xml:lang="en">Azure subscription</source>
+        <target state="translated">Azure 订阅</target>
       </trans-unit>
       <trans-unit id="baseDockerImage">
         <source xml:lang="en">Base {0} Docker image</source>
@@ -162,7 +190,7 @@
         <source xml:lang="en">Confirm {0} admin password</source>
         <target state="translated">确认 {0} 管理员密码</target>
       </trans-unit>
-      <trans-unit id="connectingToSqlServerOnDockerMessage">
+      <trans-unit id="connectingToSqlServerMessage">
         <source xml:lang="en">Connecting to SQL Server</source>
         <target state="translated">正在连接到 SQL Server</target>
       </trans-unit>
@@ -180,7 +208,7 @@
       </trans-unit>
       <trans-unit id="convertToSdkStyleConfirmation">
         <source xml:lang="en">The project '{0}' will not be fully compatible with SSDT after conversion. A backup copy of the project file will be created in the project folder prior to conversion. More information is available at https://aka.ms/sqlprojsdk. Continue with converting to SDK-style project?</source>
-        <target state="new">The project '{0}' will not be fully compatible with SSDT after conversion. A backup copy of the project file will be created in the project folder prior to conversion. More information is available at https://aka.ms/sqlprojsdk. Continue with converting to SDK-style project?</target>
+        <target state="translated">转换后，项目 \"{0}\" 将不与 SSDT 完全兼容。转换前，将在项目文件夹中创建项目文件的备份副本。有关详细信息，请参阅 https://aka.ms/sqlprojsdk。继续转换为 SDK 样式项目?</target>
       </trans-unit>
       <trans-unit id="createNew">
         <source xml:lang="en">Create New</source>
@@ -197,6 +225,10 @@
       <trans-unit id="createProjectSettings">
         <source xml:lang="en">Settings</source>
         <target state="translated">设置</target>
+      </trans-unit>
+      <trans-unit id="creatingAzureSqlServer">
+        <source xml:lang="en">Creating Azure SQL Server '{0}' ...</source>
+        <target state="translated">正在创建 Azure SQL Server “{0}”...</target>
       </trans-unit>
       <trans-unit id="creatingDeploymentSettingsMessage">
         <source xml:lang="en">Creating deployment settings ...</source>
@@ -306,6 +338,10 @@
         <source xml:lang="en">DatabaseProject</source>
         <target state="translated">DatabaseProject</target>
       </trans-unit>
+      <trans-unit id="defaultQuickPickItem">
+        <source xml:lang="en">Default - image defined as default in the container registry</source>
+        <target state="translated">默认 - 在容器注册表中定义为默认值的映像</target>
+      </trans-unit>
       <trans-unit id="deleteAction">
         <source xml:lang="en">Delete</source>
         <target state="translated">删除</target>
@@ -369,6 +405,10 @@
       <trans-unit id="dockerImageMessage">
         <source xml:lang="en">Docker Image:</source>
         <target state="translated">Docker 映像:</target>
+      </trans-unit>
+      <trans-unit id="dockerImagesPlaceHolder">
+        <source xml:lang="en">Use {0} on local arm64/Apple Silicon</source>
+        <target state="translated">在本地 arm64/Apple Silicon 上使用{0}</target>
       </trans-unit>
       <trans-unit id="dockerLogMessage">
         <source xml:lang="en">Docker logs: '{0}'</source>
@@ -458,6 +498,10 @@
         <source xml:lang="en">Enter a database name for this system database</source>
         <target state="translated">输入此系统数据库的数据库名</target>
       </trans-unit>
+      <trans-unit id="enterUser">
+        <source xml:lang="en">Enter {0} admin user name</source>
+        <target state="translated">输入 {0} 管理员用户名</target>
+      </trans-unit>
       <trans-unit id="equalComparison">
         <source xml:lang="en">The project is already up to date with the database.</source>
         <target state="translated">项目已与数据库保持最新。</target>
@@ -491,6 +535,10 @@
       <trans-unit id="excludeAction">
         <source xml:lang="en">Exclude</source>
         <target state="translated">不包括</target>
+      </trans-unit>
+      <trans-unit id="excludeObjectTypes">
+        <source xml:lang="en">Exclude Object Types</source>
+        <target state="translated">排除对象类型</target>
       </trans-unit>
       <trans-unit id="externalStream">
         <source xml:lang="en">External Stream</source>
@@ -576,6 +624,10 @@
         <source xml:lang="en">Import Elements</source>
         <target state="translated">导入元素</target>
       </trans-unit>
+      <trans-unit id="include">
+        <source xml:lang="en">Include</source>
+        <target state="translated">包括</target>
+      </trans-unit>
       <trans-unit id="installGlobally">
         <source xml:lang="en">Install globally</source>
         <target state="translated">全局安装</target>
@@ -600,9 +652,13 @@
         <source xml:lang="en">Cannot access provided database project. Only valid, open database projects can be reloaded.</source>
         <target state="translated">无法访问提供的数据库项目。只有有效的开放式数据库项目才可以重新加载。</target>
       </trans-unit>
-      <trans-unit id="invalidPropertyValue">
+      <trans-unit id="invalidPropertyValueInSqlProj">
         <source xml:lang="en">Invalid value specified for the property '{0}' in .sqlproj file</source>
         <target state="translated">.sqlproj 文件中为属性“{0}”指定的值无效</target>
+      </trans-unit>
+      <trans-unit id="invalidPropertyValueProvided">
+        <source xml:lang="en">Project property value '{0} is invalid</source>
+        <target state="translated">项目属性值 '{0} 无效</target>
       </trans-unit>
       <trans-unit id="invalidSQLPassword">
         <source xml:lang="en">{0} password doesn't meet the password complexity requirement. For more information see https://docs.microsoft.com/sql/relational-databases/security/password-policy</source>
@@ -728,6 +784,18 @@
         <source xml:lang="en">Open License Agreement</source>
         <target state="translated">打开许可协议</target>
       </trans-unit>
+      <trans-unit id="optionDescription">
+        <source xml:lang="en">Option Description</source>
+        <target state="translated">选项说明</target>
+      </trans-unit>
+      <trans-unit id="optionName">
+        <source xml:lang="en">Option Name</source>
+        <target state="translated">选项名称</target>
+      </trans-unit>
+      <trans-unit id="optionNotFoundWarningMessage">
+        <source xml:lang="en">label: {0} does not exist in the options value name lookup</source>
+        <target state="translated">标签: 选项值名称查找中不存在 {0}</target>
+      </trans-unit>
       <trans-unit id="outsideFolderPath">
         <source xml:lang="en">Items with absolute path outside project folder are not supported. Please make sure the paths in the project file are relative to project folder.</source>
         <target state="translated">不支持具有项目文件夹外绝对路径的项。请确保项目文件中的路径与项目文件夹相关。</target>
@@ -832,6 +900,10 @@
         <source xml:lang="en">Publish project</source>
         <target state="translated">发布项目</target>
       </trans-unit>
+      <trans-unit id="publishOptions">
+        <source xml:lang="en">Publish Options</source>
+        <target state="translated">发布选项</target>
+      </trans-unit>
       <trans-unit id="publishProjectSucceed">
         <source xml:lang="en">Database project published successfully</source>
         <target state="translated">已成功发布数据库项目</target>
@@ -844,6 +916,10 @@
         <source xml:lang="en">Publish Target</source>
         <target state="translated">发布目标</target>
       </trans-unit>
+      <trans-unit id="publishToAzureEmulator">
+        <source xml:lang="en">Publish to new Azure SQL Database emulator</source>
+        <target state="translated">发布到新的 Azure SQL 数据库仿真器</target>
+      </trans-unit>
       <trans-unit id="publishToContainerFailed">
         <source xml:lang="en">Failed to publish to container. {0}</source>
         <target state="translated">未能发布到容器。{0}</target>
@@ -855,6 +931,14 @@
       <trans-unit id="publishToExistingServer">
         <source xml:lang="en">Publish to an existing {0}</source>
         <target state="translated">发布到现有 {0}</target>
+      </trans-unit>
+      <trans-unit id="publishToNewAzureServer">
+        <source xml:lang="en">Publish to new Azure SQL logical server</source>
+        <target state="translated">发布到新的 Azure SQL 逻辑服务器</target>
+      </trans-unit>
+      <trans-unit id="publishToNewAzureServerFailed">
+        <source xml:lang="en">Failed to publish to new Azure SQL server. {0}</source>
+        <target state="translated">无法发布到新 Azure SQL 服务器。{0}</target>
       </trans-unit>
       <trans-unit id="publishingProjectMessage">
         <source xml:lang="en">Publishing project in a container...</source>
@@ -876,17 +960,25 @@
         <source xml:lang="en">Reload values from project</source>
         <target state="translated">从项目中重新加载值</target>
       </trans-unit>
+      <trans-unit id="reset">
+        <source xml:lang="en">Reset</source>
+        <target state="translated">重置</target>
+      </trans-unit>
       <trans-unit id="resetAllVars">
         <source xml:lang="en">Reset all variables</source>
         <target state="translated">重置所有变量</target>
+      </trans-unit>
+      <trans-unit id="resourceGroup">
+        <source xml:lang="en">Resource group</source>
+        <target state="translated">资源组</target>
       </trans-unit>
       <trans-unit id="retryFailedMessage">
         <source xml:lang="en">Operation '{0}' failed. Re-trying... Current Result: {1}. Error: '{2}'</source>
         <target state="translated">操作 "{0}" 失败。正在重试...当前结果: {1}。错误: "{2}"</target>
       </trans-unit>
       <trans-unit id="retryMessage">
-        <source xml:lang="en">Operation '{0}' failed. Re-trying... Error: '{1}'</source>
-        <target state="translated">操作 "{0}" 失败。正在重试...错误: "{1}"</target>
+        <source xml:lang="en">Operation '{0}' failed. Re-trying... Error: '{1}' </source>
+        <target state="translated">操作 “{0}” 失败。正在重试...错误: “{1}” </target>
       </trans-unit>
       <trans-unit id="retryRunMessage">
         <source xml:lang="en">Running operation '{2}' Attempt {0} of {1}</source>
@@ -936,6 +1028,10 @@
         <source xml:lang="en">Script</source>
         <target state="translated">脚本</target>
       </trans-unit>
+      <trans-unit id="sdkLearnMorePlaceholder">
+        <source xml:lang="en">Click "Learn More" button for more information about SDK-style projects</source>
+        <target state="translated">单击“了解详细信息”按钮了解有关 SDK 样式项目的详细信息</target>
+      </trans-unit>
       <trans-unit id="sdkStyleProject">
         <source xml:lang="en">SDK-style project (Preview)</source>
         <target state="translated">SDK 样式项目(预览版)</target>
@@ -968,6 +1064,10 @@
         <source xml:lang="en">Select folder structure</source>
         <target state="translated">选择文件夹结构</target>
       </trans-unit>
+      <trans-unit id="selectImageTag">
+        <source xml:lang="en">Select the image tag or press enter to use the default value</source>
+        <target state="translated">选择图像标记或按 Enter 以使用默认值</target>
+      </trans-unit>
       <trans-unit id="selectProfile">
         <source xml:lang="en">Select Profile</source>
         <target state="translated">选择配置文件</target>
@@ -999,6 +1099,10 @@
       <trans-unit id="server">
         <source xml:lang="en">Server</source>
         <target state="translated">服务器</target>
+      </trans-unit>
+      <trans-unit id="serverCreated">
+        <source xml:lang="en">Server created</source>
+        <target state="translated">已创建服务器</target>
       </trans-unit>
       <trans-unit id="serverName">
         <source xml:lang="en">Server name</source>
@@ -1180,6 +1284,10 @@
         <source xml:lang="en">View</source>
         <target state="translated">查看</target>
       </trans-unit>
+      <trans-unit id="yesRecommended">
+        <source xml:lang="en">Yes (Recommended)</source>
+        <target state="translated">是(推荐)</target>
+      </trans-unit>
       <trans-unit id="yesString">
         <source xml:lang="en">Yes</source>
         <target state="translated">是</target>
@@ -1243,6 +1351,10 @@
       <trans-unit id="sqlDatabaseProjects.close">
         <source xml:lang="en">Close Database Project</source>
         <target state="translated">关闭数据库项目</target>
+      </trans-unit>
+      <trans-unit id="sqlDatabaseProjects.collapseProjectNodes">
+        <source xml:lang="en">Whether project nodes start collapsed</source>
+        <target state="translated">项目节点是否启动已折叠</target>
       </trans-unit>
       <trans-unit id="sqlDatabaseProjects.convertToSdkStyleProject">
         <source xml:lang="en">Convert to SDK-style project</source>
@@ -1335,6 +1447,10 @@
       <trans-unit id="sqlDatabaseProjects.openContainingFolder">
         <source xml:lang="en">Open Containing Folder</source>
         <target state="translated">打开所在的文件夹</target>
+      </trans-unit>
+      <trans-unit id="sqlDatabaseProjects.openInDesigner">
+        <source xml:lang="en">Open in Designer</source>
+        <target state="translated">在设计器中打开</target>
       </trans-unit>
       <trans-unit id="sqlDatabaseProjects.properties">
         <source xml:lang="en">Properties</source>

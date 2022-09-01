@@ -17,6 +17,7 @@ export const enum ModalDialogName {
 	Connection = 'Connection',
 	Backup = 'Backup',
 	FileBrowser = 'FileBrowser',
+	UrlBrowser = 'UrlBrowser',
 	Restore = 'Restore',
 	Insights = 'Insights',
 	Profiler = 'Profiler',
@@ -49,15 +50,21 @@ export const enum TelemetryView {
 }
 
 export const enum TelemetryError {
-	DatabaseConnectionError = 'DatabaseConnectionError'
+	DatabaseConnectionError = 'DatabaseConnectionError',
+	ObjectExplorerExpandError = 'ObjectExplorerExpandError'
 }
 
 export const enum TelemetryAction {
-	AddServerGroup = 'AddServerGroup',
 	adsCommandExecuted = 'adsCommandExecuted',
+	AddExecutionPlan = 'AddExecutionPlan',
+	AddServerGroup = 'AddServerGroup',
+	BackupCreated = 'BackupCreated',
 	ConnectToServer = 'ConnectToServer',
 	CustomZoom = 'CustomZoom',
-	BackupCreated = 'BackupCreated',
+	CancelQuery = 'CancelQuery',
+	ChartCreated = 'ChartCreated',
+	Click = 'Click',
+	CompareExecutionPlan = 'CompareExecutionPlan',
 	DashboardNavigated = 'DashboardNavigated',
 	DatabaseConnected = 'DatabaseConnected',
 	DatabaseDisconnected = 'DatabaseDisconnected',
@@ -68,9 +75,6 @@ export const enum TelemetryAction {
 	DeleteAgentProxy = 'DeleteAgentProxy',
 	DeleteConnection = 'DeleteConnection',
 	DeleteServerGroup = 'DeleteServerGroup',
-	CancelQuery = 'CancelQuery',
-	ChartCreated = 'ChartCreated',
-	Click = 'Click',
 	FindNode = 'FindNode',
 	FirewallRuleRequested = 'FirewallRuleCreated',
 	GenerateScript = 'GenerateScript',
@@ -93,12 +97,14 @@ export const enum TelemetryAction {
 	RunQuery = 'RunQuery',
 	RunQueryStatement = 'RunQueryStatement',
 	RunQueryString = 'RunQueryString',
+	SearchCompleted = 'SearchCompleted',
+	SearchStarted = 'SearchStarted',
 	ShowChart = 'ShowChart',
 	StopAgentJob = 'StopAgentJob',
+	ToggleActualExecutionPlan = 'ToggleActualExecutionPlan',
+	ViewExecutionPlanComparisonProperties = 'ViewExecutionPlanComparisonProperties',
 	ViewTopOperations = 'ViewTopOperations',
 	WizardPagesNavigation = 'WizardPagesNavigation',
-	SearchStarted = 'SearchStarted',
-	SearchCompleted = 'SearchCompleted',
 	ZoomIn = 'ZoomIn',
 	ZoomOut = 'ZoomOut',
 	ZoomToFit = 'ZoomToFIt'
@@ -109,10 +115,17 @@ export const enum NbTelemetryAction {
 	RunAll = 'RunNotebook',
 	AddCell = 'AddCell',
 	KernelChanged = 'KernelChanged',
+	ConnectionChanged = 'ConnectionChanged',
+	TrustChanged = 'TrustChanged',
+	RunWithParameters = 'RunWithParameters',
 	NewNotebookFromConnections = 'NewNotebookWithConnectionProfile',
 	UndoCell = 'UndoCell',
 	RedoCell = 'RedoCell',
-	MIMETypeRendererNotFound = 'MIMETypeRendererNotFound'
+	MoveCell = 'MoveCell',
+	MIMETypeRendererNotFound = 'MIMETypeRendererNotFound',
+	CellExecutionFailed = 'CellExecutionFailed',
+	TextCellToolbarAction = 'TextCellToolbarAction',
+	WYSIWYGKeyboardAction = 'WYSIWYGKeyboardAction'
 }
 
 export const enum TelemetryPropertyName {

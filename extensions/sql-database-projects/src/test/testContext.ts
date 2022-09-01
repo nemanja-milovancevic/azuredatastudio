@@ -22,89 +22,28 @@ export const mockDacFxResult = {
 	report: ''
 };
 
+/* Get the deployment options sample model */
+export function getDeploymentOptions(): mssql.DeploymentOptions {
+	const sampleDesc = 'Sample Description text';
+	const sampleName = 'Sample Display Name';
+	const defaultOptions: mssql.DeploymentOptions = {
+		excludeObjectTypes: { value: [], description: sampleDesc, displayName: sampleName },
+		booleanOptionsDictionary: {
+			'SampleProperty1': { value: false, description: sampleDesc, displayName: sampleName },
+			'SampleProperty2': { value: false, description: sampleDesc, displayName: sampleName }
+		},
+		objectTypesDictionary: {
+			'SampleProperty1': sampleName,
+			'SampleProperty2': sampleName
+		}
+	};
+	return defaultOptions;
+}
+
 export const mockDacFxOptionsResult: mssql.DacFxOptionsResult = {
 	success: true,
 	errorMessage: '',
-	deploymentOptions: {
-		ignoreTableOptions: false,
-		ignoreSemicolonBetweenStatements: false,
-		ignoreRouteLifetime: false,
-		ignoreRoleMembership: false,
-		ignoreQuotedIdentifiers: false,
-		ignorePermissions: false,
-		ignorePartitionSchemes: false,
-		ignoreObjectPlacementOnPartitionScheme: false,
-		ignoreNotForReplication: false,
-		ignoreLoginSids: false,
-		ignoreLockHintsOnIndexes: false,
-		ignoreKeywordCasing: false,
-		ignoreIndexPadding: false,
-		ignoreIndexOptions: false,
-		ignoreIncrement: false,
-		ignoreIdentitySeed: false,
-		ignoreUserSettingsObjects: false,
-		ignoreFullTextCatalogFilePath: false,
-		ignoreWhitespace: false,
-		ignoreWithNocheckOnForeignKeys: false,
-		verifyCollationCompatibility: false,
-		unmodifiableObjectWarnings: false,
-		treatVerificationErrorsAsWarnings: false,
-		scriptRefreshModule: false,
-		scriptNewConstraintValidation: false,
-		scriptFileSize: false,
-		scriptDeployStateChecks: false,
-		scriptDatabaseOptions: false,
-		scriptDatabaseCompatibility: false,
-		scriptDatabaseCollation: false,
-		runDeploymentPlanExecutors: false,
-		registerDataTierApplication: false,
-		populateFilesOnFileGroups: false,
-		noAlterStatementsToChangeClrTypes: false,
-		includeTransactionalScripts: false,
-		includeCompositeObjects: false,
-		allowUnsafeRowLevelSecurityDataMovement: false,
-		ignoreWithNocheckOnCheckConstraints: false,
-		ignoreFillFactor: false,
-		ignoreFileSize: false,
-		ignoreFilegroupPlacement: false,
-		doNotAlterReplicatedObjects: false,
-		doNotAlterChangeDataCaptureObjects: false,
-		disableAndReenableDdlTriggers: false,
-		deployDatabaseInSingleUserMode: false,
-		createNewDatabase: false,
-		compareUsingTargetCollation: false,
-		commentOutSetVarDeclarations: false,
-		blockWhenDriftDetected: false,
-		blockOnPossibleDataLoss: false,
-		backupDatabaseBeforeChanges: false,
-		allowIncompatiblePlatform: false,
-		allowDropBlockingAssemblies: false,
-		dropConstraintsNotInSource: false,
-		dropDmlTriggersNotInSource: false,
-		dropExtendedPropertiesNotInSource: false,
-		dropIndexesNotInSource: false,
-		ignoreFileAndLogFilePath: false,
-		ignoreExtendedProperties: false,
-		ignoreDmlTriggerState: false,
-		ignoreDmlTriggerOrder: false,
-		ignoreDefaultSchema: false,
-		ignoreDdlTriggerState: false,
-		ignoreDdlTriggerOrder: false,
-		ignoreCryptographicProviderFilePath: false,
-		verifyDeployment: false,
-		ignoreComments: false,
-		ignoreColumnCollation: false,
-		ignoreAuthorizer: false,
-		ignoreAnsiNulls: false,
-		generateSmartDefaults: false,
-		dropStatisticsNotInSource: false,
-		dropRoleMembersNotInSource: false,
-		dropPermissionsNotInSource: false,
-		dropObjectsNotInSource: false,
-		ignoreColumnOrder: false,
-		doNotDropObjectTypes: [],
-		excludeObjectTypes: []
-	}
+	deploymentOptions: getDeploymentOptions()
 };
 
 export class MockDacFxService implements mssql.IDacFxService {
@@ -117,6 +56,7 @@ export class MockDacFxService implements mssql.IDacFxService {
 	public generateDeployPlan(_: string, __: string, ___: string, ____: azdata.TaskExecutionMode): Thenable<mssql.GenerateDeployPlanResult> { return Promise.resolve(mockDacFxResult); }
 	public getOptionsFromProfile(_: string): Thenable<mssql.DacFxOptionsResult> { return Promise.resolve(mockDacFxOptionsResult); }
 	public validateStreamingJob(_: string, __: string): Thenable<mssql.ValidateStreamingJobResult> { return Promise.resolve(mockDacFxResult); }
+	public parseTSqlScript(_: string, __: string): Thenable<mssql.ParseTSqlScriptResult> { return Promise.resolve({ containsCreateTableStatement: true }); }
 }
 
 export function createContext(): TestContext {

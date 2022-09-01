@@ -11,7 +11,6 @@ import * as utils from '../common/utils';
 import * as UUID from 'vscode-languageclient/lib/utils/uuid';
 import * as templates from '../templates/templates';
 import * as vscode from 'vscode';
-import * as fse from 'fs-extra';
 import type * as azdataType from 'azdata';
 import * as dataworkspace from 'dataworkspace';
 import type * as mssqlVscode from 'vscode-mssql';
@@ -21,7 +20,6 @@ import { PublishDatabaseDialog } from '../dialogs/publishDatabaseDialog';
 import { Project, reservedProjectFolders } from '../models/project';
 import { SqlDatabaseProjectTreeViewProvider } from './databaseProjectTreeViewProvider';
 import { FolderNode, FileNode } from '../models/tree/fileFolderTreeItem';
-import { IDeploySettings } from '../models/IDeploySettings';
 import { BaseProjectTreeItem } from '../models/tree/baseTreeItem';
 import { ProjectRootTreeItem } from '../models/tree/projectTreeItem';
 import { ImportDataModel } from '../models/api/import';
@@ -38,16 +36,17 @@ import { TelemetryActions, TelemetryReporter, TelemetryViews } from '../common/t
 import { IconPathHelper } from '../common/iconHelper';
 import { DashboardData, PublishData, Status } from '../models/dashboardData/dashboardData';
 import { getPublishDatabaseSettings, launchPublishTargetOption } from '../dialogs/publishDatabaseQuickpick';
-import { launchPublishToDockerContainerQuickpick } from '../dialogs/deployDatabaseQuickpick';
+import { launchCreateAzureServerQuickPick, getPublishToDockerSettings } from '../dialogs/deployDatabaseQuickpick';
 import { DeployService } from '../models/deploy/deployService';
-import { GenerateProjectFromOpenApiSpecOptions, SqlTargetPlatform } from 'sqldbproj';
+import { AddItemOptions, EntryType, GenerateProjectFromOpenApiSpecOptions, IDatabaseReferenceProjectEntry, ISqlProjectPublishSettings, IPublishToDockerSettings, ISqlProject, ItemType, SqlTargetPlatform } from 'sqldbproj';
 import { AutorestHelper } from '../tools/autorestHelper';
 import { createNewProjectFromDatabaseWithQuickpick } from '../dialogs/createProjectFromDatabaseQuickpick';
 import { addDatabaseReferenceQuickpick } from '../dialogs/addDatabaseReferenceQuickpick';
-import { IDeployProfile } from '../models/deploy/deployProfile';
-import { EntryType, FileProjectEntry, IDatabaseReferenceProjectEntry, SqlProjectReferenceProjectEntry } from '../models/projectEntry';
+import { ISqlDbDeployProfile } from '../models/deploy/deployProfile';
+import { FileProjectEntry, SqlProjectReferenceProjectEntry } from '../models/projectEntry';
 import { UpdateProjectAction, UpdateProjectDataModel } from '../models/api/updateProject';
-import { targetPlatformToAssets } from '../projectProvider/projectAssets';
+import { AzureSqlClient } from '../models/deploy/azureSqlClient';
+import { ConnectionService } from '../models/connections/connectionService';
 
 const maxTableLength = 10;
 
@@ -66,6 +65,11 @@ export enum TaskExecutionMode {
 
 export type AddDatabaseReferenceSettings = ISystemDatabaseReferenceSettings | IDacpacReferenceSettings | IProjectReferenceSettings;
 
+interface FileWatcherStatus {
+	fileWatcher: vscode.FileSystemWatcher;
+	containsCreateTableStatement: boolean;
+}
+
 /**
  * Controller for managing lifecycle of projects
  */
@@ -74,15 +78,20 @@ export class ProjectsController {
 	private buildHelper: BuildHelper;
 	private buildInfo: DashboardData[] = [];
 	private publishInfo: PublishData[] = [];
-	private deployService: DeployService;
+	public deployService: DeployService;
+	private connectionService: ConnectionService;
+	private azureSqlClient: AzureSqlClient;
 	private autorestHelper: AutorestHelper;
 
-	projFileWatchers = new Map<string, vscode.FileSystemWatcher>();
+	private projFileWatchers = new Map<string, vscode.FileSystemWatcher>();
+	private fileWatchers = new Map<string, FileWatcherStatus>();
 
 	constructor(private _outputChannel: vscode.OutputChannel) {
 		this.netCoreTool = new NetCoreTool(this._outputChannel);
 		this.buildHelper = new BuildHelper();
-		this.deployService = new DeployService(this._outputChannel);
+		this.azureSqlClient = new AzureSqlClient();
+		this.deployService = new DeployService(this.azureSqlClient, this._outputChannel);
+		this.connectionService = new ConnectionService(this._outputChannel);
 		this.autorestHelper = new AutorestHelper(this._outputChannel);
 	}
 
@@ -197,20 +206,6 @@ export class ProjectsController {
 		await fs.mkdir(projectFolderPath, { recursive: true });
 		await fs.writeFile(newProjFilePath, newProjFileContents);
 
-		// Copy project readme
-		if (targetPlatformToAssets?.has(targetPlatform) && (targetPlatformToAssets?.get(targetPlatform)?.readmeFolder)) {
-			const readmeFolder = targetPlatformToAssets.get(targetPlatform)?.readmeFolder;
-
-			if (readmeFolder) {
-				const readmeFile = path.join(readmeFolder, 'README.md');
-				const folderExists = await utils.exists(readmeFile);
-				if (folderExists) {
-					await fs.copyFile(readmeFile, path.join(projectFolderPath, 'README.md'));
-					await fse.copy(path.join(readmeFolder, 'assets'), path.join(projectFolderPath, 'assets'));
-				}
-			}
-		}
-
 		await this.addTemplateFiles(newProjFilePath, creationParams.projectTypeId);
 
 		return newProjFilePath;
@@ -241,8 +236,10 @@ export class ProjectsController {
 			this.buildInfo.shift();		// Remove the first element to maintain the length
 		}
 
-		// Check mssql extension for project dlls (tracking issue #10273)
-		await this.buildHelper.createBuildDirFolder();
+		// get dlls and targets file needed for building for legacy style projects
+		if (!project.isSdkStyleProject) {
+			await this.buildHelper.createBuildDirFolder(this._outputChannel);
+		}
 
 		const options: ShellCommandOptions = {
 			commandTitle: 'Build',
@@ -288,42 +285,77 @@ export class ProjectsController {
 	}
 
 	/**
+	 * Publishes a project to a new Azure server
+	 * @param context a treeItem in a project's hierarchy, to be used to obtain a Project or the Project itself
+	 * @param deployProfile deploy profile
+	 */
+	public async publishToNewAzureServer(context: Project | dataworkspace.WorkspaceTreeItem, deployProfile: ISqlDbDeployProfile): Promise<void> {
+		try {
+			TelemetryReporter.sendActionEvent(TelemetryViews.ProjectController, TelemetryActions.publishToNewAzureServer);
+			const project: Project = this.getProjectFromContext(context);
+			if (deployProfile?.deploySettings && deployProfile?.sqlDbSetting) {
+				void utils.showInfoMessageWithOutputChannel(constants.creatingAzureSqlServer(deployProfile?.sqlDbSetting?.serverName), this._outputChannel);
+				const connectionUri = await this.deployService.createNewAzureSqlServer(deployProfile);
+				if (connectionUri) {
+					deployProfile.deploySettings.connectionUri = connectionUri;
+					const publishResult = await this.publishOrScriptProject(project, deployProfile.deploySettings, true);
+					if (publishResult && publishResult.success) {
+						if (deployProfile.sqlDbSetting) {
+
+							// Connecting to the deployed db to add the profile to connection viewlet
+							await this.connectionService.getConnection(deployProfile.sqlDbSetting, true, deployProfile.sqlDbSetting.dbName);
+						}
+						void vscode.window.showInformationMessage(constants.publishProjectSucceed);
+					} else {
+						void utils.showErrorMessageWithOutputChannel(constants.publishToNewAzureServerFailed, publishResult?.errorMessage || '', this._outputChannel);
+					}
+				} else {
+					void utils.showErrorMessageWithOutputChannel(constants.publishToNewAzureServerFailed, constants.deployProjectFailedMessage, this._outputChannel);
+				}
+			}
+		} catch (error) {
+			void utils.showErrorMessageWithOutputChannel(constants.publishToNewAzureServerFailed, error, this._outputChannel);
+			TelemetryReporter.sendErrorEvent(TelemetryViews.ProjectController, TelemetryActions.publishToNewAzureServer);
+		}
+	}
+
+	/**
 	 * Publishes a project to docker container
 	 * @param context a treeItem in a project's hierarchy, to be used to obtain a Project or the Project itself
 	 * @param deployProfile
 	 */
-	public async publishToDockerContainer(context: Project | dataworkspace.WorkspaceTreeItem, deployProfile: IDeployProfile): Promise<void> {
+	public async publishToDockerContainer(context: Project | dataworkspace.WorkspaceTreeItem, deployProfile: IPublishToDockerSettings): Promise<void> {
 		const project: Project = this.getProjectFromContext(context);
+		// Removing the path separator from the image base name to be able to add that in the telemetry. With the separator the name is flagged as user path which is not true
+		// We only need to know the image base parts so it's ok to use a different separator when adding to telemetry
+		const dockerImageNameForTelemetry = deployProfile.dockerSettings.dockerBaseImage.replace(/\//gi, '_');
 		try {
-			TelemetryReporter.sendActionEvent(TelemetryViews.ProjectController, TelemetryActions.publishToContainer);
+			TelemetryReporter.createActionEvent(TelemetryViews.ProjectController, TelemetryActions.publishToContainer)
+				.withAdditionalProperties({ dockerBaseImage: dockerImageNameForTelemetry })
+				.send();
 
-			if (deployProfile && deployProfile.deploySettings) {
-				let connectionUri: string | undefined;
-				if (deployProfile.localDbSetting) {
-					void utils.showInfoMessageWithOutputChannel(constants.publishingProjectMessage, this._outputChannel);
-					connectionUri = await this.deployService.deploy(deployProfile, project);
-					if (connectionUri) {
-						deployProfile.deploySettings.connectionUri = connectionUri;
-					}
-				}
+			void utils.showInfoMessageWithOutputChannel(constants.publishingProjectMessage, this._outputChannel);
+			const connectionUri = await this.deployService.deployToContainer(deployProfile, project);
+			if (connectionUri) {
+				deployProfile.sqlProjectPublishSettings.connectionUri = connectionUri;
+			}
 
-				if (deployProfile.deploySettings.connectionUri) {
-					const publishResult = await this.publishOrScriptProject(project, deployProfile.deploySettings, true);
-					if (publishResult && publishResult.success) {
-						if (deployProfile.localDbSetting) {
-							await this.deployService.getConnection(deployProfile.localDbSetting, true, deployProfile.localDbSetting.dbName);
-						}
-						void vscode.window.showInformationMessage(constants.publishProjectSucceed);
-					} else {
-						void utils.showErrorMessageWithOutputChannel(constants.publishToContainerFailed, publishResult?.errorMessage || '', this._outputChannel);
-					}
+			if (deployProfile.sqlProjectPublishSettings.connectionUri) {
+				const publishResult = await this.publishOrScriptProject(project, deployProfile.sqlProjectPublishSettings, true);
+				if (publishResult && publishResult.success) {
+					await this.connectionService.getConnection(deployProfile.dockerSettings, true, deployProfile.dockerSettings.dbName);
+					void vscode.window.showInformationMessage(constants.publishProjectSucceed);
 				} else {
-					void utils.showErrorMessageWithOutputChannel(constants.publishToContainerFailed, constants.deployProjectFailedMessage, this._outputChannel);
+					void utils.showErrorMessageWithOutputChannel(constants.publishToContainerFailed, publishResult?.errorMessage || '', this._outputChannel);
 				}
+			} else {
+				void utils.showErrorMessageWithOutputChannel(constants.publishToContainerFailed, constants.deployProjectFailedMessage, this._outputChannel);
 			}
 		} catch (error) {
 			void utils.showErrorMessageWithOutputChannel(constants.publishToContainerFailed, error, this._outputChannel);
-			TelemetryReporter.sendErrorEvent(TelemetryViews.ProjectController, TelemetryActions.publishToContainer);
+			TelemetryReporter.createErrorEvent(TelemetryViews.ProjectController, TelemetryActions.publishToContainer)
+				.withAdditionalProperties({ dockerBaseImage: dockerImageNameForTelemetry })
+				.send();
 		}
 		return;
 	}
@@ -368,12 +400,24 @@ export class ProjectsController {
 		}
 
 		if (publishTarget === constants.PublishTargetType.docker) {
-			const deployProfile = await launchPublishToDockerContainerQuickpick(project);
-			if (deployProfile?.deploySettings) {
-				await this.publishToDockerContainer(project, deployProfile);
+			const publishToDockerSettings = await getPublishToDockerSettings(project);
+			if (!publishToDockerSettings) {
+				// User cancelled
+				return;
 			}
+			await this.publishToDockerContainer(project, publishToDockerSettings);
+		} else if (publishTarget === constants.PublishTargetType.newAzureServer) {
+			try {
+				const settings = await launchCreateAzureServerQuickPick(project, this.azureSqlClient);
+				if (settings?.deploySettings && settings?.sqlDbSetting) {
+					await this.publishToNewAzureServer(project, settings);
+				}
+			} catch (error) {
+				void utils.showErrorMessageWithOutputChannel(constants.publishToNewAzureServerFailed, error, this._outputChannel);
+			}
+
 		} else {
-			let settings: IDeploySettings | undefined = await getPublishDatabaseSettings(project);
+			let settings: ISqlProjectPublishSettings | undefined = await getPublishDatabaseSettings(project);
 
 			if (settings) {
 				// 5. Select action to take
@@ -395,7 +439,7 @@ export class ProjectsController {
 	 * @param publish Whether to publish the deployment or just generate a script
 	 * @returns The DacFx result of the deployment
 	 */
-	public async publishOrScriptProject(project: Project, settings: IDeploySettings, publish: boolean): Promise<mssql.DacFxResult | undefined> {
+	public async publishOrScriptProject(project: Project, settings: ISqlProjectPublishSettings, publish: boolean): Promise<mssql.DacFxResult | undefined> {
 		const telemetryProps: Record<string, string> = {};
 		const telemetryMeasures: Record<string, number> = {};
 		const buildStartTime = new Date().getTime();
@@ -591,7 +635,7 @@ export class ProjectsController {
 		const project = this.getProjectFromContext(treeNode);
 		const relativePathToParent = this.getRelativePath(treeNode.element);
 		const absolutePathToParent = path.join(project.projectFolderPath, relativePathToParent);
-		const newFolderName = await this.promptForNewObjectName(new templates.ProjectScriptType(templates.folder, constants.folderFriendlyName, ''),
+		const newFolderName = await this.promptForNewObjectName(new templates.ProjectScriptType(ItemType.folder, constants.folderFriendlyName, ''),
 			project, absolutePathToParent);
 
 		if (!newFolderName) {
@@ -623,10 +667,11 @@ export class ProjectsController {
 	}
 
 	public async addItemPromptFromNode(treeNode: dataworkspace.WorkspaceTreeItem, itemTypeName?: string): Promise<void> {
-		await this.addItemPrompt(this.getProjectFromContext(treeNode), this.getRelativePath(treeNode.element), itemTypeName, treeNode.treeDataProvider as SqlDatabaseProjectTreeViewProvider);
+		await this.addItemPrompt(this.getProjectFromContext(treeNode), this.getRelativePath(treeNode.element), { itemType: itemTypeName }, treeNode.treeDataProvider as SqlDatabaseProjectTreeViewProvider);
 	}
 
-	public async addItemPrompt(project: Project, relativePath: string, itemTypeName?: string, treeDataProvider?: SqlDatabaseProjectTreeViewProvider): Promise<void> {
+	public async addItemPrompt(project: ISqlProject, relativePath: string, options?: AddItemOptions, treeDataProvider?: SqlDatabaseProjectTreeViewProvider): Promise<void> {
+		let itemTypeName = options?.itemType;
 		if (!itemTypeName) {
 			const items: vscode.QuickPickItem[] = [];
 
@@ -645,7 +690,7 @@ export class ProjectsController {
 
 		const itemType = templates.get(itemTypeName);
 		const absolutePathToParent = path.join(project.projectFolderPath, relativePath);
-		let itemObjectName = await this.promptForNewObjectName(itemType, project, absolutePathToParent, constants.sqlFileExtension);
+		let itemObjectName = await this.promptForNewObjectName(itemType, project, absolutePathToParent, constants.sqlFileExtension, options?.defaultName);
 
 		itemObjectName = itemObjectName?.trim();
 
@@ -659,9 +704,9 @@ export class ProjectsController {
 		const telemetryProps: Record<string, string> = { itemType: itemType.type };
 		const telemetryMeasurements: Record<string, number> = {};
 
-		if (itemType.type === templates.preDeployScript) {
+		if (itemType.type === ItemType.preDeployScript) {
 			telemetryMeasurements.numPredeployScripts = project.preDeployScripts.length;
-		} else if (itemType.type === templates.postDeployScript) {
+		} else if (itemType.type === ItemType.postDeployScript) {
 			telemetryMeasurements.numPostdeployScripts = project.postDeployScripts.length;
 		}
 
@@ -849,6 +894,41 @@ export class ProjectsController {
 		} catch (err) {
 			void vscode.window.showErrorMessage(utils.getErrorMessage(err));
 		}
+	}
+
+	/**
+	 * Opens a file in the editor and adds a file watcher to check if a create table statement has been added
+	 * @param fileSystemUri uri of file
+	 * @param node node of file in the tree
+	 */
+	public async openFileWithWatcher(fileSystemUri: vscode.Uri, node: FileNode): Promise<void> {
+		await vscode.commands.executeCommand(constants.vscodeOpenCommand, fileSystemUri);
+		const projectTargetVersion = (node.root as ProjectRootTreeItem).project.getProjectTargetVersion();
+		const initiallyContainsCreateTableStatement = await utils.fileContainsCreateTableStatement(fileSystemUri.fsPath, projectTargetVersion);
+
+		const fileWatcher: vscode.FileSystemWatcher = vscode.workspace.createFileSystemWatcher(fileSystemUri.fsPath);
+		this.fileWatchers.set(fileSystemUri.fsPath, { fileWatcher: fileWatcher, containsCreateTableStatement: initiallyContainsCreateTableStatement });
+
+		fileWatcher.onDidChange(async (uri: vscode.Uri) => {
+			const afterContainsCreateTableStatement = await utils.fileContainsCreateTableStatement(fileSystemUri.fsPath, projectTargetVersion);
+			const previousStatus = this.fileWatchers.get(uri.fsPath)?.containsCreateTableStatement;
+
+			// if the contains create table statement status is different, reload the project so that the "Open in Designer" menu option
+			// on the file node is there if a create table statement has been added or removed if it's been removed
+			if (previousStatus !== afterContainsCreateTableStatement) {
+				utils.getDataWorkspaceExtensionApi().refreshProjectsTree();
+				this.fileWatchers.get(uri.fsPath)!.containsCreateTableStatement = afterContainsCreateTableStatement;
+			}
+		});
+
+		// stop watching for changes to the file after it's closed
+		const closeSqlproj = vscode.workspace.onDidCloseTextDocument((d) => {
+			if (this.fileWatchers.has(d.uri.fsPath)) {
+				this.fileWatchers.get(d.uri.fsPath)?.fileWatcher.dispose();
+				this.fileWatchers.delete(d.uri.fsPath);
+				closeSqlproj.dispose();
+			}
+		});
 	}
 
 	/**
@@ -1177,7 +1257,7 @@ export class ProjectsController {
 				newProjName: projectInfo.projectName,
 				folderUri: vscode.Uri.file(projectInfo.outputFolder),
 				projectTypeId: constants.emptySqlDatabaseProjectTypeId,
-				sdkStyle: false
+				sdkStyle: !!options?.isSDKStyle
 			});
 
 			const project = await Project.openProject(newProjFilePath);
@@ -1188,7 +1268,7 @@ export class ProjectsController {
 			const postDeploymentScript: vscode.Uri | undefined = this.findPostDeploymentScript(fileFolderList);
 
 			if (postDeploymentScript) {
-				await project.addScriptItem(path.relative(project.projectFolderPath, postDeploymentScript.fsPath), undefined, templates.postDeployScript);
+				await project.addScriptItem(path.relative(project.projectFolderPath, postDeploymentScript.fsPath), undefined, ItemType.postDeployScript);
 			}
 
 			if (options?.doNotOpenInWorkspace !== true) {
@@ -1257,13 +1337,13 @@ export class ProjectsController {
 		if (projectTypeId === constants.edgeSqlDatabaseProjectTypeId) {
 			const project = await Project.openProject(newProjFilePath);
 
-			await this.createFileFromTemplate(project, templates.get(templates.table), 'DataTable.sql', { 'OBJECT_NAME': 'DataTable' });
-			await this.createFileFromTemplate(project, templates.get(templates.dataSource), 'EdgeHubInputDataSource.sql', { 'OBJECT_NAME': 'EdgeHubInputDataSource', 'LOCATION': 'edgehub://' });
-			await this.createFileFromTemplate(project, templates.get(templates.dataSource), 'SqlOutputDataSource.sql', { 'OBJECT_NAME': 'SqlOutputDataSource', 'LOCATION': 'sqlserver://tcp:.,1433' });
-			await this.createFileFromTemplate(project, templates.get(templates.fileFormat), 'StreamFileFormat.sql', { 'OBJECT_NAME': 'StreamFileFormat' });
-			await this.createFileFromTemplate(project, templates.get(templates.externalStream), 'EdgeHubInputStream.sql', { 'OBJECT_NAME': 'EdgeHubInputStream', 'DATA_SOURCE_NAME': 'EdgeHubInputDataSource', 'LOCATION': 'input', 'OPTIONS': ',\n\tFILE_FORMAT = StreamFileFormat' });
-			await this.createFileFromTemplate(project, templates.get(templates.externalStream), 'SqlOutputStream.sql', { 'OBJECT_NAME': 'SqlOutputStream', 'DATA_SOURCE_NAME': 'SqlOutputDataSource', 'LOCATION': 'TSQLStreaming.dbo.DataTable', 'OPTIONS': '' });
-			await this.createFileFromTemplate(project, templates.get(templates.externalStreamingJob), 'EdgeStreamingJob.sql', { 'OBJECT_NAME': 'EdgeStreamingJob' });
+			await this.createFileFromTemplate(project, templates.get(ItemType.table), 'DataTable.sql', { 'OBJECT_NAME': 'DataTable' });
+			await this.createFileFromTemplate(project, templates.get(ItemType.dataSource), 'EdgeHubInputDataSource.sql', { 'OBJECT_NAME': 'EdgeHubInputDataSource', 'LOCATION': 'edgehub://' });
+			await this.createFileFromTemplate(project, templates.get(ItemType.dataSource), 'SqlOutputDataSource.sql', { 'OBJECT_NAME': 'SqlOutputDataSource', 'LOCATION': 'sqlserver://tcp:.,1433' });
+			await this.createFileFromTemplate(project, templates.get(ItemType.fileFormat), 'StreamFileFormat.sql', { 'OBJECT_NAME': 'StreamFileFormat' });
+			await this.createFileFromTemplate(project, templates.get(ItemType.externalStream), 'EdgeHubInputStream.sql', { 'OBJECT_NAME': 'EdgeHubInputStream', 'DATA_SOURCE_NAME': 'EdgeHubInputDataSource', 'LOCATION': 'input', 'OPTIONS': ',\n\tFILE_FORMAT = StreamFileFormat' });
+			await this.createFileFromTemplate(project, templates.get(ItemType.externalStream), 'SqlOutputStream.sql', { 'OBJECT_NAME': 'SqlOutputStream', 'DATA_SOURCE_NAME': 'SqlOutputDataSource', 'LOCATION': 'TSQLStreaming.dbo.DataTable', 'OPTIONS': '' });
+			await this.createFileFromTemplate(project, templates.get(ItemType.externalStreamingJob), 'EdgeStreamingJob.sql', { 'OBJECT_NAME': 'EdgeStreamingJob' });
 		}
 	}
 
@@ -1288,8 +1368,8 @@ export class ProjectsController {
 		}
 	}
 
-	private async promptForNewObjectName(itemType: templates.ProjectScriptType, _project: Project, folderPath: string, fileExtension?: string): Promise<string | undefined> {
-		const suggestedName = itemType.friendlyName.replace(/\s+/g, '');
+	private async promptForNewObjectName(itemType: templates.ProjectScriptType, _project: ISqlProject, folderPath: string, fileExtension?: string, defaultName?: string): Promise<string | undefined> {
+		const suggestedName = defaultName ?? itemType.friendlyName.replace(/\s+/g, '');
 		let counter: number = 0;
 
 		do {

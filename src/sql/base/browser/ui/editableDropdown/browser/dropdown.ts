@@ -51,6 +51,10 @@ export interface IDropdownOptions extends IDropdownStyles {
 	 * Value to use as aria-label for the input box
 	 */
 	ariaLabel?: string;
+	/**
+	 * Value to use as aria-description for the input box
+	 */
+	ariaDescription?: string;
 }
 
 export interface IDropdownStyles {
@@ -86,6 +90,7 @@ export class Dropdown extends Disposable implements IListVirtualDelegate<string>
 	private _onFocus = this._register(new Emitter<void>());
 	public onFocus: Event<void> = this._onFocus.event;
 	private readonly _widthControlElement: HTMLElement;
+	private readonly _widthControlElementContainer: HTMLElement;
 
 	constructor(
 		container: HTMLElement,
@@ -95,9 +100,12 @@ export class Dropdown extends Disposable implements IListVirtualDelegate<string>
 		super();
 		this._options = opt || Object.create(null);
 		mixin(this._options, defaults, false);
-		this._widthControlElement = DOM.append(container, document.createElement('span'));
-		this._widthControlElement.classList.add('monaco-dropdown-width-control-element');
-		this._widthControlElement.setAttribute('aria-hidden', 'true');
+		// Set up the width measure control using the same classes and structure as the context menu to get the accurate width measurement.
+		this._widthControlElementContainer = DOM.append(container, document.createElement('div'));
+		this._widthControlElementContainer.classList.add('monaco-dropdown-width-control-element', 'context-view', 'fixed');
+		this._widthControlElementContainer.setAttribute('aria-hidden', 'true');
+		this._widthControlElement = DOM.append(this._widthControlElementContainer, document.createElement('span'));
+		this._widthControlElement.classList.add('editable-drop-option-text');
 
 		this._el = DOM.append(container, DOM.$('.monaco-dropdown'));
 		this._el.style.width = '100%';
@@ -115,7 +123,8 @@ export class Dropdown extends Disposable implements IListVirtualDelegate<string>
 				validation: v => this._inputValidator(v)
 			},
 			placeholder: this._options.placeholder,
-			ariaLabel: this._options.ariaLabel
+			ariaLabel: this._options.ariaLabel,
+			ariaDescription: this._options.ariaDescription
 		});
 
 		// Clear title from input box element (defaults to placeholder value) since we don't want a tooltip for the selected value
@@ -310,6 +319,8 @@ export class Dropdown extends Disposable implements IListVirtualDelegate<string>
 
 	private _updateDropDownList(): void {
 		this._selectList.splice(0, this._selectList.length, this._dataSource.filteredValues.map(v => { return { text: v }; }));
+		const selectedIndex = this._dataSource.filteredValues.indexOf(this.value);
+		this._selectList.setSelection(selectedIndex !== -1 ? [selectedIndex] : []);
 
 		let width = this._inputContainer.clientWidth;
 
@@ -408,5 +419,9 @@ export class Dropdown extends Disposable implements IListVirtualDelegate<string>
 
 	public get selectList(): List<IDropdownListItem> {
 		return this._selectList;
+	}
+
+	public get options(): IDropdownOptions {
+		return this._options;
 	}
 }

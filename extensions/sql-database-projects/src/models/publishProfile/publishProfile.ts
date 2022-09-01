@@ -3,7 +3,7 @@
  *  Licensed under the Source EULA. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as xmldom from 'xmldom';
+import * as xmldom from '@xmldom/xmldom';
 import * as constants from '../../common/constants';
 import * as utils from '../../common/utils';
 import * as mssql from 'mssql';
@@ -12,6 +12,7 @@ import * as vscode from 'vscode';
 
 import { promises as fs } from 'fs';
 import { SqlConnectionDataSource } from '../dataSources/sqlConnectionStringSource';
+import { TelemetryActions, TelemetryReporter, TelemetryViews } from '../../common/telemetry';
 
 // only reading db name, connection string, and SQLCMD vars from profile for now
 export interface PublishProfile {
@@ -55,6 +56,13 @@ export async function load(profileUri: vscode.Uri, dacfxService: utils.IDacFxSer
 	// get all SQLCMD variables to include from the profile
 	const sqlCmdVariables = utils.readSqlCmdVariables(profileXmlDoc, true);
 
+	TelemetryReporter.createActionEvent(TelemetryViews.SqlProjectPublishDialog, TelemetryActions.profileLoaded)
+		.withAdditionalProperties({
+			hasTargetDbName: (!!targetDbName).toString(),
+			hasConnectionString: (!!connectionInfo?.connectionId).toString(),
+			hasSqlCmdVariables: (Object.keys(sqlCmdVariables).length > 0).toString()
+		}).send();
+
 	return {
 		databaseName: targetDbName,
 		serverName: connectionInfo.server,
@@ -80,8 +88,9 @@ async function readConnectionString(xmlDoc: any): Promise<{ connectionId: string
 			const azdataApi = utils.getAzdataApi();
 			if (dataSource.integratedSecurity) {
 				if (azdataApi) {
-					const connection = await utils.getAzdataApi()!.connection.connect(connectionProfile, false, false);
-					connId = connection.connectionId;
+					const connectionResult = await utils.getAzdataApi()!.connection.connect(connectionProfile, false, false);
+					utils.throwIfNotConnected(connectionResult);
+					connId = connectionResult.connectionId!;
 				} else {
 					// TODO@chgagnon - hook up VS Code MSSQL
 				}

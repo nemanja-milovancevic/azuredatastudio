@@ -243,7 +243,14 @@ export class MiaaDashboardOverviewPage extends DashboardPage {
 								cancellable: false
 							},
 							async (_progress, _token) => {
-								return await this._azApi.az.sql.miarc.delete(this._miaaModel.info.name, this._controllerModel.info.namespace, this._controllerModel.azAdditionalEnvVars);
+								return await this._azApi.az.sql.miarc.delete(
+									this._miaaModel.info.name,
+									{
+										resourceGroup: undefined,
+										namespace: this._controllerModel.info.namespace,
+									},
+									this._controllerModel.azAdditionalEnvVars
+								);
 							}
 						);
 						await this._controllerModel.refreshTreeNode();
@@ -337,7 +344,7 @@ export class MiaaDashboardOverviewPage extends DashboardPage {
 		if (this._miaaModel.config) {
 			this._instanceProperties.status = this._miaaModel.config.status.state || '-';
 			this._instanceProperties.externalEndpoint = this._miaaModel.config.status.primaryEndpoint || loc.notConfigured;
-			this._instanceProperties.vCores = this._miaaModel.config.spec.scheduling?.default?.resources?.limits?.cpu?.toString() || '';
+			this._instanceProperties.vCores = this._miaaModel.config.spec?.scheduling?.default?.resources?.limits?.cpu?.toString() || '';
 			this._databasesMessage.value = !this._miaaModel.config.status.primaryEndpoint ? loc.noExternalEndpoint : '';
 			if (!this._miaaModel.config.status.primaryEndpoint) {
 				this._databasesContainer.removeItem(this._connectToServerLoading);

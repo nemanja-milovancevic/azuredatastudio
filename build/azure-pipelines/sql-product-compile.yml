@@ -1,7 +1,7 @@
 steps:
 - task: NodeTool@0
   inputs:
-    versionSpec: "14.x"
+    versionSpec: "16.x"
 
 - task: geeklearningio.gl-vsts-tasks-yarn.yarn-installer-task.YarnInstaller@3
   inputs:
@@ -77,9 +77,11 @@ steps:
     node build/azure-pipelines/mixin
   displayName: Mix in quality
 
+# Run these separately to avoid OOM errors on pipeline machines
 - script: |
     set -e
-    yarn npm-run-all -lp core-ci extensions-ci hygiene eslint valid-layers-check
+    yarn npm-run-all -lp core-ci extensions-ci
+    yarn npm-run-all -lp hygiene eslint valid-layers-check
   displayName: Compile & Hygiene
 
 - script: |

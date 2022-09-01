@@ -122,7 +122,7 @@ declare module 'azurecore' {
 		/**
 		 * Information that describes the Azure Kusto resource
 		 */
-		 azureKustoResource?: Resource;
+		azureKustoResource?: Resource;
 
 		/**
 		 * Information that describes the Azure Log Analytics resource
@@ -130,9 +130,14 @@ declare module 'azurecore' {
 		azureLogAnalyticsResource?: Resource;
 
 		/**
-		 * Information that describes the Azure Storage resourceI
+		 * Information that describes the Azure Storage resource
 		 */
 		azureStorageResource?: Resource;
+
+		/**
+		 * Information that describes the Power BI resource
+		 */
+		powerBiResource?: Resource;
 
 		/**
 		 * A list of tenant IDs to authenticate against. If defined, then these IDs will be used
@@ -301,6 +306,7 @@ declare module 'azurecore' {
 		 * @param region The region value
 		 */
 		getRegionDisplayName(region?: string): string;
+		getProviderMetadataForAccount(account: AzureAccount): AzureAccountProviderMetadata;
 		provideResources(): azureResource.IAzureResourceProvider[];
 
 		runGraphQuery<T extends azureResource.AzureGraphResource>(account: AzureAccount, subscriptions: azureResource.AzureResourceSubscription[], ignoreErrors: boolean, query: string): Promise<ResourceQueryResult<T>>;
@@ -340,7 +346,8 @@ declare module 'azurecore' {
 			postgresServer = 'microsoft.dbforpostgresql/servers',
 			azureArcService = 'microsoft.azuredata/datacontrollers',
 			storageAccount = 'microsoft.storage/storageaccounts',
-			logAnalytics = 'microsoft.operationalinsights/workspaces'
+			logAnalytics = 'microsoft.operationalinsights/workspaces',
+			cosmosDbAccount = 'microsoft.documentdb/databaseaccounts'
 		}
 
 		export interface IAzureResourceProvider extends azdata.DataProvider {

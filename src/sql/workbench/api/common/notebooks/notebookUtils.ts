@@ -13,10 +13,14 @@ import { NBFORMAT, NBFORMAT_MINOR } from 'sql/workbench/common/constants';
 import { NotebookCellKind } from 'vs/workbench/api/common/extHostTypes';
 
 const DotnetInteractiveJupyterKernelPrefix = '.net-';
-const DotnetInteractiveLanguagePrefix = 'dotnet-interactive.';
+export const DotnetInteractiveLanguagePrefix = 'dotnet-interactive.';
 export const DotnetInteractiveDisplayName = '.NET Interactive';
 
 export function convertToVSCodeNotebookCell(cellKind: azdata.nb.CellType, cellIndex: number, cellUri: URI, docUri: URI, cellLanguage: string, cellSource?: string | string[]): vscode.NotebookCell {
+	// We only use this notebook field for .NET Interactive's intellisense, which only uses the notebook's URI
+	let notebook = <vscode.NotebookDocument>{
+		uri: docUri
+	};
 	return <vscode.NotebookCell>{
 		kind: cellKind === CellTypes.Code ? NotebookCellKind.Code : NotebookCellKind.Markup,
 		index: cellIndex,
@@ -24,13 +28,13 @@ export function convertToVSCodeNotebookCell(cellKind: azdata.nb.CellType, cellIn
 			uri: cellUri,
 			languageId: cellLanguage,
 			getText: () => Array.isArray(cellSource) ? cellSource.join('') : (cellSource ?? ''),
+			notebook: notebook
 		},
-		notebook: <vscode.NotebookDocument>{
-			uri: docUri
-		},
+		notebook: notebook,
 		outputs: [],
 		metadata: {},
-		mime: undefined
+		mime: undefined,
+		executionSummary: undefined
 	};
 }
 

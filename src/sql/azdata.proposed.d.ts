@@ -539,6 +539,17 @@ declare module 'azdata' {
 		appendData(data: any[][]): Thenable<void>;
 	}
 
+	export interface ListViewOption {
+		/**
+		 * The optional accessibility label for the column. Default is the label for the list view option.
+		 */
+		ariaLabel?: string;
+		/**
+		 * Specify the icon for the option. The value could the path to the icon or and ADS icon defined in {@link SqlThemeIcon}.
+		 */
+		icon?: IconPath;
+	}
+
 	export interface IconColumnCellValue {
 		/**
 		 * The icon to be displayed.
@@ -735,29 +746,21 @@ declare module 'azdata' {
 		 */
 		export interface TableInfo {
 			/**
-			 * The server name.
+			 * Used as the table designer editor's tab header text.
 			 */
-			server: string;
+			title: string;
 			/**
-			 * The database name
+			 * Used as the table designer editor's tab header hover text.
 			 */
-			database: string;
-			/**
-			 * The schema name, only required for existing table.
-			 */
-			schema?: string;
-			/**
-			 * The table name, only required for existing table.
-			 */
-			name?: string;
-			/**
-			 * A boolean value indicates whether a new table is being designed.
-			 */
-			isNewTable: boolean;
+			tooltip: string;
 			/**
 			 * Unique identifier of the table. Will be used to decide whether a designer is already opened for the table.
 			 */
 			id: string;
+			/**
+			 * A boolean value indicates whether a new table is being designed.
+			 */
+			isNewTable: boolean;
 			/**
 			 * Extension can store additional information that the provider needs to uniquely identify a table.
 			 */
@@ -781,6 +784,14 @@ declare module 'azdata' {
 			 * The initial state of the designer.
 			 */
 			viewModel: DesignerViewModel;
+			/**
+			 * The new table info after initialization.
+			 */
+			tableInfo: TableInfo;
+			/**
+			 * The issues.
+			 */
+			issues?: DesignerIssue[];
 		}
 
 		/**
@@ -933,6 +944,10 @@ declare module 'azdata' {
 			 * Additional primary key properties. Common primary key properties: primaryKeyName, primaryKeyDescription.
 			 */
 			additionalPrimaryKeyProperties?: DesignerDataPropertyInfo[];
+			/**
+			 * Whether to use advanced save mode. for advanced save mode, a publish changes dialog will be opened with preview of changes.
+			 */
+			useAdvancedSaveMode: boolean;
 		}
 
 		export interface TableDesignerBuiltInTableViewOptions extends DesignerTablePropertiesBase {
@@ -1016,6 +1031,14 @@ declare module 'azdata' {
 			 */
 			canRemoveRows?: boolean;
 			/**
+			 * Whether user can move rows from one index to another. The default value is true.
+			 */
+			canMoveRows?: boolean;
+			/**
+			 * Whether user can insert rows at a given index to the table. The default value is true.
+			 */
+			canInsertRows?: boolean;
+			/**
 			 * Whether to show confirmation when user removes a row. The default value is false.
 			 */
 			showRemoveRowConfirmation?: boolean;
@@ -1081,7 +1104,11 @@ declare module 'azdata' {
 			/**
 			 * Update a property.
 			 */
-			Update = 2
+			Update = 2,
+			/**
+			 * Change the position of an item in the collection.
+			 */
+			Move = 3
 		}
 
 		/**
@@ -1095,7 +1122,7 @@ declare module 'azdata' {
 			/**
 			 * the path of the edit target.
 			 */
-			path: DesignerEditPath;
+			path: DesignerPropertyPath;
 			/**
 			 * the new value.
 			 */
@@ -1103,7 +1130,7 @@ declare module 'azdata' {
 		}
 
 		/**
-		 * The path of the edit target.
+		 * The path of the property.
 		 * Below are the 3 scenarios and their expected path.
 		 * Note: 'index-{x}' in the description below are numbers represent the index of the object in the list.
 		 * 1. 'Add' scenario
@@ -1117,7 +1144,7 @@ declare module 'azdata' {
 		 *     a. ['propertyName1',index-1]. Example: remove a column from the columns property: ['columns',0'].
 		 *     b. ['propertyName1',index-1,'propertyName2',index-2]. Example: remove a column mapping from a foreign key's column mapping table: ['foreignKeys',0,'mappings',0].
 		 */
-		export type DesignerEditPath = (string | number)[];
+		export type DesignerPropertyPath = (string | number)[];
 
 		/**
 		 * Severity of the messages returned by the provider after processing an edit.
@@ -1126,6 +1153,28 @@ declare module 'azdata' {
 		 * 'information': Informational message.
 		 */
 		export type DesignerIssueSeverity = 'error' | 'warning' | 'information';
+
+		/**
+		 * Represents the issue in the designer
+		 */
+		export interface DesignerIssue {
+			/**
+			 * Severity of the issue.
+			 */
+			severity: DesignerIssueSeverity,
+			/**
+			 * Path of the property that is associated with the issue.
+			 */
+			propertyPath?: DesignerPropertyPath,
+			/**
+			 * Description of the issue.
+			 */
+			description: string,
+			/**
+			 * Url to a web page that has the explaination of the issue.
+			 */
+			moreInfoLink?: string;
+		}
 
 		/**
 		 * The result returned by the table designer provider after handling an edit request.
@@ -1146,7 +1195,7 @@ declare module 'azdata' {
 			/**
 			 * Issues of current state.
 			 */
-			issues?: { severity: DesignerIssueSeverity, description: string, propertyPath?: DesignerEditPath }[];
+			issues?: DesignerIssue[];
 			/**
 			 * The input validation error.
 			 */
@@ -1221,6 +1270,10 @@ declare module 'azdata' {
 
 		export interface ExecutionPlanNode {
 			/**
+			 * Unique id given to node by the provider
+			 */
+			id: string;
+			/**
 			 * Type of the node. This property determines the icon that is displayed for it
 			 */
 			type: string;
@@ -1268,6 +1321,18 @@ declare module 'azdata' {
 			 * Warning/parallelism badges applicable to the current node
 			 */
 			badges: ExecutionPlanBadge[];
+			/**
+			 * Data to show in top operations table for the node.
+			 */
+			topOperationsData: TopOperationsDataItem[];
+			/**
+			 * Output row count associated with the node
+			 */
+			rowCountDisplayString: string;
+			/**
+			 * Cost string for the node
+			 */
+			costDisplayString: string;
 		}
 
 		export interface ExecutionPlanBadge {
@@ -1327,6 +1392,29 @@ declare module 'azdata' {
 			 * Display value of property to show in tooltip and other UI element.
 			 */
 			displayValue: string;
+			/**
+			 * Data type of the property value
+			 */
+			dataType: ExecutionPlanGraphElementPropertyDataType;
+			/**
+			 * Indicates which value is better when 2 similar properties are compared.
+			 */
+			betterValue: ExecutionPlanGraphElementPropertyBetterValue;
+		}
+
+		export enum ExecutionPlanGraphElementPropertyDataType {
+			Number = 0,
+			String = 1,
+			Boolean = 2,
+			Nested = 3
+		}
+
+		export enum ExecutionPlanGraphElementPropertyBetterValue {
+			LowerNumber = 0,
+			HigherNumber = 1,
+			True = 2,
+			False = 3,
+			None = 4
 		}
 
 		export interface ExecutionPlanRecommendations {
@@ -1353,6 +1441,10 @@ declare module 'azdata' {
 			 * File type for execution plan. This will be the file type of the editor when the user opens the graph file
 			 */
 			graphFileType: string;
+			/**
+			 * Index of the execution plan in the file content
+			 */
+			planIndexInFile?: number;
 		}
 
 		export interface GetExecutionPlanResult extends ResultStatus {
@@ -1379,7 +1471,7 @@ declare module 'azdata' {
 			/**
 			 * List of matching nodes for the ExecutionGraphComparisonResult.
 			 */
-			matchingNodes: ExecutionGraphComparisonResult[];
+			matchingNodesId: number[];
 			/**
 			 * The parent of the ExecutionGraphComparisonResult.
 			 */
@@ -1389,6 +1481,11 @@ declare module 'azdata' {
 		export interface ExecutionPlanComparisonResult extends ResultStatus {
 			firstComparisonResult: ExecutionGraphComparisonResult;
 			secondComparisonResult: ExecutionGraphComparisonResult;
+		}
+
+		export interface IsExecutionPlanResult {
+			isExecutionPlan: boolean;
+			queryExecutionPlanFileExtension: string;
 		}
 
 		export interface ExecutionPlanProvider extends DataProvider {
@@ -1405,6 +1502,26 @@ declare module 'azdata' {
 			 * @param secondPlanFile file that contains the second execution plan.
 			 */
 			compareExecutionPlanGraph(firstPlanFile: ExecutionPlanGraphInfo, secondPlanFile: ExecutionPlanGraphInfo): Thenable<ExecutionPlanComparisonResult>;
+			/**
+			 * Determines if the provided value is an execution plan and returns the appropriate file extension.
+			 * @param value String that needs to be checked.
+			 */
+			isExecutionPlan(value: string): Thenable<IsExecutionPlanResult>;
+		}
+
+		export interface TopOperationsDataItem {
+			/**
+			 * Column name for the top operation data item
+			 */
+			columnName: string;
+			/**
+			 * Cell data type for the top operation data item
+			 */
+			dataType: ExecutionPlanGraphElementPropertyDataType;
+			/**
+			 * Cell value for the top operation data item
+			 */
+			displayValue: string | number | boolean;
 		}
 	}
 
@@ -1455,5 +1572,82 @@ declare module 'azdata' {
 		 * Link that is clicked
 		 */
 		link: LinkArea;
+	}
+
+	export interface TextComponentProperties {
+		/**
+		 * Corresponds to the aria-live accessibility attribute for this component
+		 */
+		ariaLive?: string;
+	}
+
+	export interface ContainerBuilder<TComponent extends Component, TLayout, TItemLayout, TPropertyBag extends ContainerProperties> extends ComponentBuilder<TComponent, TPropertyBag> {
+		/**
+		 * Sets the initial set of properties for the container being created
+		 * @param properties The properties to apply to the container
+		 */
+		withProps(properties: TPropertyBag): ContainerBuilder<TComponent, TLayout, TItemLayout, TPropertyBag>;
+	}
+
+	export interface ContainerProperties extends ComponentProperties {
+		/**
+		 * Corresponds to the aria-live accessibility attribute for this component
+		 */
+		ariaLive?: string;
+	}
+	export namespace queryeditor {
+
+		export interface QueryMessage {
+			/**
+			 * The message string
+			 */
+			message: string;
+			/**
+			 * Whether this message is an error message or not
+			 */
+			isError: boolean;
+			/**
+			 * The timestamp for when this message was sent
+			 */
+			time?: string;
+		}
+
+		/**
+		 * Information about a query that was executed
+		 */
+		export interface QueryInfo {
+			/**
+			 * Any messages that have been received from the query provider
+			 */
+			messages: QueryMessage[];
+			/**
+			 * The ranges for each batch that has executed so far
+			 */
+			batchRanges: vscode.Range[];
+		}
+
+		export interface QueryEventListener {
+			/**
+			 * An event that is fired for query events
+			 * @param type The type of query event
+			 * @param document The document this event was sent by
+			 * @param args The extra information for the event, if any
+			 * The args sent depend on the type of event :
+			 * queryStart: undefined
+			 * queryStop: undefined
+			 * executionPlan: string (the plan itself)
+			 * visualize: ResultSetSummary (the result set to be visualized)
+			 * @param queryInfo The information about the query that triggered this event
+			 */
+			onQueryEvent(type: QueryEventType, document: QueryDocument, args: ResultSetSummary | string | undefined, queryInfo: QueryInfo): void;
+		}
+	}
+
+	export interface NodeInfo {
+		/**
+		 * The object type of the node. Node type is used to determine the icon, the object type is the actual type of the node, e.g. for Tables node
+		 * under the database, the nodeType is Folder, the objectType is be Tables.
+		 */
+		objectType?: string;
 	}
 }

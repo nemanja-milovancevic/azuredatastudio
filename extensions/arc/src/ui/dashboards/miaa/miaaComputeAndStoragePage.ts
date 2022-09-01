@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import * as azdata from 'azdata';
 import * as azExt from 'az-ext';
 import * as loc from '../../../localizedConstants';
-import { IconPathHelper, cssStyles, ConnectionMode } from '../../../constants';
+import { IconPathHelper, cssStyles } from '../../../constants';
 import { DashboardPage } from '../../components/dashboardPage';
 import { convertToGibibyteString } from '../../../common/utils';
 import { MiaaModel } from '../../../models/miaaModel';
@@ -19,6 +19,7 @@ export class MiaaComputeAndStoragePage extends DashboardPage {
 	private coresRequestBox?: azdata.InputBoxComponent;
 	private memoryLimitBox?: azdata.InputBoxComponent;
 	private memoryRequestBox?: azdata.InputBoxComponent;
+	private syncSecondaryToCommitBox?: azdata.InputBoxComponent;
 
 	private discardButton?: azdata.ButtonComponent;
 	private saveButton?: azdata.ButtonComponent;
@@ -27,7 +28,8 @@ export class MiaaComputeAndStoragePage extends DashboardPage {
 		coresLimit?: string,
 		coresRequest?: string,
 		memoryLimit?: string,
-		memoryRequest?: string
+		memoryRequest?: string,
+		syncSecondaryToCommit?: string
 	} = {};
 
 	private readonly _azApi: azExt.IExtension;
@@ -130,23 +132,13 @@ export class MiaaComputeAndStoragePage extends DashboardPage {
 						},
 						async (_progress, _token): Promise<void> => {
 							try {
-								if (this._miaaModel.controllerModel.info.connectionMode === ConnectionMode.direct) {
-									await this._azApi.az.sql.miarc.update(
-										this._miaaModel.info.name,
-										this.saveArgs,
-										this._miaaModel.controllerModel.info.resourceGroup,
-										undefined, // Indirect mode argument - namespace
-										undefined, // Indirect mode argument - usek8s
-										this._miaaModel.controllerModel.azAdditionalEnvVars);
-								} else {
-									await this._azApi.az.sql.miarc.update(
-										this._miaaModel.info.name,
-										this.saveArgs,
-										undefined, // Direct mode argument - resourceGroup
-										this._miaaModel.controllerModel.info.namespace,
-										true,
-										this._miaaModel.controllerModel.azAdditionalEnvVars);
-								}
+								await this._azApi.az.sql.miarc.update(
+									this._miaaModel.info.name,
+									this.saveArgs,
+									undefined, // Direct mode argument - resourceGroup
+									this._miaaModel.controllerModel.info.namespace,
+									true,
+									this._miaaModel.controllerModel.azAdditionalEnvVars);
 							} catch (err) {
 								this.saveButton!.enabled = true;
 								throw err;
@@ -180,6 +172,7 @@ export class MiaaComputeAndStoragePage extends DashboardPage {
 				try {
 					this.editCores();
 					this.editMemory();
+					this.editSyncSecondaryToCommit();
 				} catch (error) {
 					vscode.window.showErrorMessage(loc.pageDiscardFailed(error));
 				} finally {
@@ -266,19 +259,40 @@ export class MiaaComputeAndStoragePage extends DashboardPage {
 			})
 		);
 
+		this.syncSecondaryToCommitBox = this.modelView.modelBuilder.inputBox().withProps({
+			readOnly: false,
+			min: -1,
+			max: 2,
+			inputType: 'number',
+			placeHolder: loc.loading,
+			ariaLabel: loc.syncSecondaryToCommit
+		}).component();
+
+		this.disposables.push(
+			this.syncSecondaryToCommitBox.onTextChanged(() => {
+				if (!(this.handleOnTextChanged(this.syncSecondaryToCommitBox!))) {
+					this.saveArgs.syncSecondaryToCommit = undefined;
+				} else {
+					this.saveArgs.syncSecondaryToCommit = this.syncSecondaryToCommitBox!.value;
+				}
+			})
+		);
+
 	}
 
 	private createUserInputSection(): azdata.Component[] {
 		if (this._miaaModel.configLastUpdated) {
 			this.editCores();
 			this.editMemory();
+			this.editSyncSecondaryToCommit();
 		}
 
 		return [
 			this.createConfigurationSectionContainer(loc.coresRequest, this.coresRequestBox!),
 			this.createConfigurationSectionContainer(loc.coresLimit, this.coresLimitBox!),
 			this.createConfigurationSectionContainer(loc.memoryRequest, this.memoryRequestBox!),
-			this.createConfigurationSectionContainer(loc.memoryLimit, this.memoryLimitBox!)
+			this.createConfigurationSectionContainer(loc.memoryLimit, this.memoryLimitBox!),
+			this.createConfigurationSectionContainer(loc.syncSecondaryToCommit, this.syncSecondaryToCommitBox!),
 
 		];
 	}
@@ -336,8 +350,9 @@ export class MiaaComputeAndStoragePage extends DashboardPage {
 			currentCPUSize = '';
 		}
 
-		this.coresRequestBox!.placeHolder = currentCPUSize;
-		this.coresRequestBox!.value = '';
+		this.coresRequestBox!.value = currentCPUSize;
+		this.coresRequestBox!.placeHolder = '';
+
 		this.saveArgs.coresRequest = undefined;
 
 		currentCPUSize = this._miaaModel.config?.spec?.scheduling?.default?.resources?.limits?.cpu;
@@ -348,6 +363,7 @@ export class MiaaComputeAndStoragePage extends DashboardPage {
 
 		this.coresLimitBox!.placeHolder = currentCPUSize;
 		this.coresLimitBox!.value = '';
+
 		this.saveArgs.coresLimit = undefined;
 	}
 
@@ -377,11 +393,22 @@ export class MiaaComputeAndStoragePage extends DashboardPage {
 		this.memoryLimitBox!.placeHolder = currentMemSizeConversion!;
 		this.memoryLimitBox!.value = '';
 
+
 		this.saveArgs.memoryLimit = undefined;
+	}
+
+	private editSyncSecondaryToCommit(): void {
+		let currentSyncSecondaryToCommit = this._miaaModel.config?.spec?.syncSecondaryToCommit;
+
+		this.syncSecondaryToCommitBox!.placeHolder = currentSyncSecondaryToCommit!;
+		this.syncSecondaryToCommitBox!.value = '';
+
+		this.saveArgs.syncSecondaryToCommit = undefined;
 	}
 
 	private handleServiceUpdated() {
 		this.editCores();
 		this.editMemory();
+		this.editSyncSecondaryToCommit();
 	}
 }

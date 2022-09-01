@@ -13,18 +13,20 @@ import { localize } from 'vs/nls';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { contrastBorder, editorWidgetBackground, foreground, listHoverBackground, textLinkForeground, widgetShadow } from 'vs/platform/theme/common/colorRegistry';
 import { IColorTheme, ICssStyleCollector, registerThemingParticipant } from 'vs/platform/theme/common/themeService';
+import { QueryResultsView } from 'sql/workbench/contrib/query/browser/queryResultsView';
 
 export class ExecutionPlanFileView {
 	private _parent: HTMLElement;
 	private _loadingSpinner: LoadingSpinner;
 	private _loadingErrorInfoBox: InfoBox;
 	private _executionPlanViews: ExecutionPlanView[] = [];
-	private _graphs?: azdata.executionPlan.ExecutionPlanGraph[] = [];
+	public graphs?: azdata.executionPlan.ExecutionPlanGraph[] = [];
 	private _container = DOM.$('.eps-container');
 
 	private _planCache: Map<string, azdata.executionPlan.ExecutionPlanGraph[]> = new Map();
 
 	constructor(
+		private _queryResultsView: QueryResultsView,
 		@IInstantiationService private instantiationService: IInstantiationService,
 		@IExecutionPlanService private executionPlanService: IExecutionPlanService
 	) {
@@ -56,10 +58,10 @@ export class ExecutionPlanFileView {
 	public addGraphs(newGraphs: azdata.executionPlan.ExecutionPlanGraph[] | undefined) {
 		if (newGraphs) {
 			newGraphs.forEach(g => {
-				const ep = this.instantiationService.createInstance(ExecutionPlanView, this._container, this._executionPlanViews.length + 1);
+				const ep = this.instantiationService.createInstance(ExecutionPlanView, this._container, this._executionPlanViews.length + 1, this, this._queryResultsView);
 				ep.model = g;
 				this._executionPlanViews.push(ep);
-				this._graphs.push(g);
+				this.graphs.push(g);
 				this.updateRelativeCosts();
 			});
 		}
@@ -104,7 +106,7 @@ export class ExecutionPlanFileView {
 	}
 
 	private updateRelativeCosts() {
-		const sum = this._graphs.reduce((prevCost: number, cg) => {
+		const sum = this.graphs.reduce((prevCost: number, cg) => {
 			return prevCost += cg.root.subTreeCost + cg.root.cost;
 		}, 0);
 
@@ -113,6 +115,13 @@ export class ExecutionPlanFileView {
 				ep.planHeader.relativeCost = ((ep.model.root.subTreeCost + ep.model.root.cost) / sum) * 100;
 			});
 		}
+	}
+
+	public scrollToNode(planId: number, nodeId: string): void {
+		this._executionPlanViews[planId].container.scrollIntoView(true);
+		const element = this._executionPlanViews[planId].executionPlanDiagram.getElementById(nodeId);
+		this._executionPlanViews[planId].executionPlanDiagram.centerElement(element);
+		this._executionPlanViews[planId].executionPlanDiagram.selectElement(element);
 	}
 }
 

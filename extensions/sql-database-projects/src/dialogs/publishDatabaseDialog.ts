@@ -10,14 +10,14 @@ import * as utils from '../common/utils';
 
 import { Project } from '../models/project';
 import { SqlConnectionDataSource } from '../models/dataSources/sqlConnectionStringSource';
-import { IDeploySettings } from '../models/IDeploySettings';
 import { DeploymentOptions } from 'mssql';
 import { IconPathHelper } from '../common/iconHelper';
 import { cssStyles } from '../common/uiConstants';
-import { getAgreementDisplayText, getConnectionName, getDockerBaseImages, getPublishServerName } from './utils';
+import { getAgreementDisplayText, getConnectionName, getDefaultDockerImageWithTag, getDockerBaseImages, getPublishServerName } from './utils';
 import { TelemetryActions, TelemetryReporter, TelemetryViews } from '../common/telemetry';
-import { IDeployProfile } from '../models/deploy/deployProfile';
 import { Deferred } from '../common/promise';
+import { PublishOptionsDialog } from './publishOptionsDialog';
+import { ISqlProjectPublishSettings, IPublishToDockerSettings, SqlTargetPlatform } from 'sqldbproj';
 
 interface DataSourceDropdownValue extends azdataType.CategoryValue {
 	dataSource: SqlConnectionDataSource;
@@ -56,14 +56,17 @@ export class PublishDatabaseDialog {
 	private deploymentOptions: DeploymentOptions | undefined;
 	private profileUsed: boolean = false;
 	private serverName: string | undefined;
+	protected optionsButton: azdataType.ButtonComponent | undefined;
+	private publishOptionsDialog: PublishOptionsDialog | undefined;
+	public publishOptionsModified: boolean = false;
 
 	private completionPromise: Deferred = new Deferred();
 
 	private toDispose: vscode.Disposable[] = [];
 
-	public publish: ((proj: Project, profile: IDeploySettings) => any) | undefined;
-	public publishToContainer: ((proj: Project, profile: IDeployProfile) => any) | undefined;
-	public generateScript: ((proj: Project, profile: IDeploySettings) => any) | undefined;
+	public publish: ((proj: Project, profile: ISqlProjectPublishSettings) => any) | undefined;
+	public publishToContainer: ((proj: Project, profile: IPublishToDockerSettings) => any) | undefined;
+	public generateScript: ((proj: Project, profile: ISqlProjectPublishSettings) => any) | undefined;
 	public readPublishProfile: ((profileUri: vscode.Uri) => any) | undefined;
 
 	constructor(private project: Project) {
@@ -134,13 +137,17 @@ export class PublishDatabaseDialog {
 				title: constants.sqlCmdVariables
 			};
 
+			// Get the default deployment option and set
+			const options = await this.getDefaultDeploymentOptions();
+			this.setDeploymentOptions(options);
+
 			const profileRow = this.createProfileRow(view);
 			this.connectionRow = this.createConnectionRow(view);
 			this.databaseRow = this.createDatabaseRow(view);
+			const displayOptionsButton = this.createOptionsButton(view);
 
 			const horizontalFormSection = view.modelBuilder.flexContainer().withLayout({ flexFlow: 'column' }).component();
 			horizontalFormSection.addItems([profileRow, this.databaseRow]);
-
 
 			this.formBuilder = <azdataType.FormBuilder>view.modelBuilder.formContainer()
 				.withFormItems([
@@ -164,6 +171,10 @@ export class PublishDatabaseDialog {
 								title: constants.selectConnectionRadioButtonsTitle,
 								component: selectConnectionRadioButtons
 							},*/
+							{
+								component: displayOptionsButton,
+								title: ''
+							}
 						]
 					}
 				], {
@@ -194,7 +205,9 @@ export class PublishDatabaseDialog {
 				const connProfile: azdataType.IConnectionProfile = dataSource.getConnectionProfile();
 
 				if (dataSource.integratedSecurity) {
-					connId = (await utils.getAzdataApi()!.connection.connect(connProfile, false, false)).connectionId;
+					const connResult = await utils.getAzdataApi()!.connection.connect(connProfile, false, false);
+					utils.throwIfNotConnected(connResult);
+					connId = connResult.connectionId!;
 				}
 				else {
 					connId = (await utils.getAzdataApi()!.connection.openConnectionDialog(undefined, connProfile)).connectionId;
@@ -207,7 +220,6 @@ export class PublishDatabaseDialog {
 
 				connId = this.connectionId;
 			}
-
 			return await utils.getAzdataApi()!.connection.getUriForConnection(connId);
 		}
 		catch (err) {
@@ -217,7 +229,7 @@ export class PublishDatabaseDialog {
 
 	public async publishClick(): Promise<void> {
 		if (this.existingServerSelected) {
-			const settings: IDeploySettings = {
+			const settings: ISqlProjectPublishSettings = {
 				databaseName: this.targetDatabaseName,
 				serverName: this.getServerName(),
 				connectionUri: await this.getConnectionUri(),
@@ -229,11 +241,16 @@ export class PublishDatabaseDialog {
 			utils.getAzdataApi()!.window.closeDialog(this.dialog);
 			await this.publish!(this.project, settings);
 		} else {
-			const dockerBaseImage = this.getBaseDockerImageName();
+			let dockerBaseImage = this.getBaseDockerImageName();
 			const baseImages = getDockerBaseImages(this.project.getProjectTargetVersion());
 			const imageInfo = baseImages.find(x => x.name === dockerBaseImage);
-			const settings: IDeployProfile = {
-				localDbSetting: {
+
+			// selecting the image tag isn't currently exposed in the publish dialog, so this adds the tag matching the target platform
+			// to make sure the correct image is used for the project's target platform when the docker base image is SQL Server
+			dockerBaseImage = getDefaultDockerImageWithTag(this.project.getProjectTargetVersion(), dockerBaseImage, imageInfo);
+
+			const settings: IPublishToDockerSettings = {
+				dockerSettings: {
 					dbName: this.targetDatabaseName,
 					dockerBaseImage: dockerBaseImage,
 					dockerBaseImageEula: imageInfo?.agreementInfo?.link?.url || '',
@@ -242,7 +259,7 @@ export class PublishDatabaseDialog {
 					serverName: constants.defaultLocalServerName,
 					userName: constants.defaultLocalServerAdminName
 				},
-				deploySettings: {
+				sqlProjectPublishSettings: {
 					databaseName: this.targetDatabaseName,
 					serverName: constants.defaultLocalServerName,
 					connectionUri: '',
@@ -263,7 +280,7 @@ export class PublishDatabaseDialog {
 		TelemetryReporter.sendActionEvent(TelemetryViews.SqlProjectPublishDialog, TelemetryActions.generateScriptClicked);
 
 		const sqlCmdVars = this.getSqlCmdVariablesForPublish();
-		const settings: IDeploySettings = {
+		const settings: ISqlProjectPublishSettings = {
 			databaseName: this.targetDatabaseName,
 			serverName: this.getServerName(),
 			connectionUri: await this.getConnectionUri(),
@@ -280,13 +297,10 @@ export class PublishDatabaseDialog {
 	}
 
 	public async getDeploymentOptions(): Promise<DeploymentOptions> {
-		// eventually, database options will be configurable in this dialog
-		// but for now, just send the default DacFx deployment options if no options were loaded from a publish profile
 		if (!this.deploymentOptions) {
 			// We only use the dialog in ADS context currently so safe to cast to the mssql DeploymentOptions here
 			this.deploymentOptions = await utils.getDefaultPublishDeploymentOptions(this.project) as DeploymentOptions;
 		}
-
 		return this.deploymentOptions;
 	}
 
@@ -509,7 +523,8 @@ export class PublishDatabaseDialog {
 		this.loadProfileTextBox = view.modelBuilder.inputBox().withProps({
 			placeHolder: constants.loadProfilePlaceholderText,
 			ariaLabel: constants.profile,
-			width: cssStyles.publishDialogTextboxWidth
+			width: cssStyles.publishDialogTextboxWidth,
+			enabled: false
 		}).component();
 
 		const profileLabel = view.modelBuilder.text().withProps({
@@ -533,7 +548,7 @@ export class PublishDatabaseDialog {
 			width: cssStyles.publishDialogLabelWidth
 		}).component();
 
-		const connectionRow = view.modelBuilder.flexContainer().withItems([serverLabel, this.targetConnectionTextBox], { flex: '0 0 auto', CSSStyles: { 'margin-right': '10px' } }).withLayout({ flexFlow: 'row', alignItems: 'center' }).component();
+		const connectionRow = view.modelBuilder.flexContainer().withItems([serverLabel, this.targetConnectionTextBox], { flex: '0 0 auto', CSSStyles: { 'margin': '-8px 10px -15px 0' } }).withLayout({ flexFlow: 'row', alignItems: 'center' }).component();
 		connectionRow.insertItem(selectConnectionButton, 2, { CSSStyles: { 'margin-right': '0px' } });
 
 		return connectionRow;
@@ -588,6 +603,16 @@ export class PublishDatabaseDialog {
 
 		const baseImages = getDockerBaseImages(this.project.getProjectTargetVersion());
 		const baseImagesValues: azdataType.CategoryValue[] = baseImages.map(x => { return { name: x.name, displayName: x.displayName }; });
+
+		// add preview string for 2022
+		// TODO: remove after 2022 is GA
+		if (this.project.getProjectTargetVersion() === constants.targetPlatformToVersion.get(SqlTargetPlatform.sqlServer2022)) {
+			const sqlServerImageIndex = baseImagesValues.findIndex(image => image.displayName === constants.SqlServerDockerImageName);
+			if (sqlServerImageIndex >= 0) {
+				baseImagesValues[sqlServerImageIndex].displayName = constants.SqlServerDocker2022ImageName;
+			}
+		}
+
 		this.baseDockerImageDropDown = view.modelBuilder.dropDown().withProps({
 			values: baseImagesValues,
 			ariaLabel: constants.baseDockerImage(name),
@@ -649,7 +674,7 @@ export class PublishDatabaseDialog {
 				this.targetDatabaseTextBox = view.modelBuilder.inputBox().withProps({
 					ariaLabel: constants.databaseNameLabel,
 					required: true,
-					width: cssStyles.publishDialogTextboxWidth,
+					width: cssStyles.publishDialogDropdownWidth,
 					value: this.getDefaultDatabaseName()
 				}).component();
 			}
@@ -661,7 +686,7 @@ export class PublishDatabaseDialog {
 					value: this.getDefaultDatabaseName(),
 					ariaLabel: constants.databaseNameLabel,
 					required: true,
-					width: cssStyles.publishDialogTextboxWidth,
+					width: cssStyles.publishDialogDropdownWidth,
 					editable: true,
 					fireOnTextChange: true
 				}).component();
@@ -823,6 +848,9 @@ export class PublishDatabaseDialog {
 					this.targetDatabaseName = result.databaseName;
 				}
 
+				// set options coming from the publish profiles to deployment options
+				this.setDeploymentOptions(result.options);
+
 				if (Object.keys(result.sqlCmdVariables).length) {
 					// add SQLCMD Variables table if it wasn't there before and the profile had sqlcmd variables
 					if (Object.keys(this.project.sqlCmdVariables).length === 0 && Object.keys(<Record<string, string>>this.sqlCmdVars).length === 0) {
@@ -894,6 +922,47 @@ export class PublishDatabaseDialog {
 		}
 
 		return true;
+	}
+
+	/*
+	 * Creates Display options container with a 'configure options' button
+	 */
+	private createOptionsButton(view: azdataType.ModelView): azdataType.FlexContainer {
+		this.optionsButton = view.modelBuilder.button().withProps({
+			label: constants.AdvancedOptionsButton,
+			secondary: true,
+			width: cssStyles.PublishingOptionsButtonWidth
+		}).component();
+
+		const optionsRow = view.modelBuilder.flexContainer().withItems([this.optionsButton], { CSSStyles: { flex: '0 0 auto', 'margin': '-8px 0 0 307px' } }).withLayout({ flexFlow: 'row', alignItems: 'center' }).component();
+
+		this.toDispose.push(this.optionsButton.onDidClick(async () => {
+			TelemetryReporter.sendActionEvent(TelemetryViews.SqlProjectPublishDialog, TelemetryActions.publishOptionsOpened);
+			// Create fresh options dialog with default selections each time when creating the 'configure options' button
+			this.publishOptionsDialog = new PublishOptionsDialog(this.deploymentOptions!, this);
+			this.publishOptionsDialog.openDialog();
+		}));
+
+		return optionsRow;
+	}
+
+	/*
+	* Gets the default deployment options from the dacfx service
+	*/
+	public async getDefaultDeploymentOptions(): Promise<DeploymentOptions> {
+		const defaultDeploymentOptions = await utils.getDefaultPublishDeploymentOptions(this.project) as DeploymentOptions;
+		if (defaultDeploymentOptions && defaultDeploymentOptions.excludeObjectTypes !== undefined) {
+			// For publish dialog no default exclude options should exists
+			defaultDeploymentOptions.excludeObjectTypes.value = [];
+		}
+		return defaultDeploymentOptions;
+	}
+
+	/*
+	* Sets the default deployment options to deployment options model object
+	*/
+	public setDeploymentOptions(deploymentOptions: DeploymentOptions): void {
+		this.deploymentOptions = deploymentOptions;
 	}
 }
 

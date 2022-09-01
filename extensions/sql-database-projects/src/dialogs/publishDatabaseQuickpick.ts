@@ -9,14 +9,14 @@ import { Project } from '../models/project';
 import { PublishProfile, readPublishProfile } from '../models/publishProfile/publishProfile';
 import { promptForPublishProfile } from './publishDatabaseDialog';
 import { getDefaultPublishDeploymentOptions, getVscodeMssqlApi } from '../common/utils';
-import { IConnectionInfo } from 'vscode-mssql';
-import { IDeploySettings } from '../models/IDeploySettings';
+import { IConnectionInfo, IFireWallRuleError } from 'vscode-mssql';
 import { getPublishServerName } from './utils';
+import { ISqlProjectPublishSettings, ISqlProject, SqlTargetPlatform } from 'sqldbproj';
 
 /**
  * Create flow for Publishing a database using only VS Code-native APIs such as QuickPick
  */
-export async function getPublishDatabaseSettings(project: Project, promptForConnection: boolean = true): Promise<IDeploySettings | undefined> {
+export async function getPublishDatabaseSettings(project: ISqlProject, promptForConnection: boolean = true): Promise<ISqlProjectPublishSettings | undefined> {
 
 	// 1. Select publish settings file (optional)
 	// Create custom quickpick so we can control stuff like displaying the loading indicator
@@ -88,7 +88,18 @@ export async function getPublishDatabaseSettings(project: Project, promptForConn
 			}
 			// Get the list of databases now to validate that the connection is valid and re-prompt them if it isn't
 			try {
-				connectionUri = await vscodeMssqlApi.connect(connectionProfile);
+				try {
+					connectionUri = await vscodeMssqlApi.connect(connectionProfile);
+				} catch (azureErr) {
+					// If the error is the firewall rule, prompt to add firewall rule and try again
+					const firewallRuleError = <IFireWallRuleError>azureErr;
+					if (firewallRuleError?.connectionUri) {
+						await vscodeMssqlApi.promptForFirewallRule(azureErr.connectionUri, connectionProfile);
+						connectionUri = await vscodeMssqlApi.connect(connectionProfile);
+					} else {
+						throw azureErr;
+					}
+				}
 				dbs = await vscodeMssqlApi.listDatabases(connectionUri);
 			} catch (err) {
 				// no-op, the mssql extension handles showing the error to the user. We'll just go
@@ -196,7 +207,7 @@ export async function getPublishDatabaseSettings(project: Project, promptForConn
 	}
 
 	// 6. Generate script/publish
-	let settings: IDeploySettings = {
+	let settings: ISqlProjectPublishSettings = {
 		databaseName: databaseName,
 		serverName: connectionProfile?.server || '',
 		connectionUri: connectionUri || '',
@@ -209,9 +220,18 @@ export async function getPublishDatabaseSettings(project: Project, promptForConn
 
 export async function launchPublishTargetOption(project: Project): Promise<constants.PublishTargetType | undefined> {
 	// Show options to user for deploy to existing server or docker
-	const name = getPublishServerName(project.getProjectTargetVersion());
+	const target = project.getProjectTargetVersion();
+	const name = getPublishServerName(target);
+	const logicalServerName = target === constants.targetPlatformToVersion.get(SqlTargetPlatform.sqlAzure) ? constants.AzureSqlLogicalServerName : constants.SqlServerName;
+
+	// Options list based on target
+	const options = target === constants.targetPlatformToVersion.get(SqlTargetPlatform.sqlAzure) ?
+		[constants.publishToAzureEmulator, constants.publishToNewAzureServer, constants.publishToExistingServer(logicalServerName)] :
+		[constants.publishToDockerContainer(name), constants.publishToExistingServer(logicalServerName)];
+
+	// Show the options to the user
 	const publishOption = await vscode.window.showQuickPick(
-		[constants.publishToExistingServer(name), constants.publishToDockerContainer(name)],
+		options,
 		{ title: constants.selectPublishOption, ignoreFocusOut: true });
 
 	// Return when user hits escape
@@ -219,11 +239,16 @@ export async function launchPublishTargetOption(project: Project): Promise<const
 		return undefined;
 	}
 
+	// Map the title to the publish option type
 	switch (publishOption) {
 		case constants.publishToExistingServer(name):
 			return constants.PublishTargetType.existingServer;
 		case constants.publishToDockerContainer(name):
 			return constants.PublishTargetType.docker;
+		case constants.publishToAzureEmulator:
+			return constants.PublishTargetType.docker;
+		case constants.publishToNewAzureServer:
+			return constants.PublishTargetType.newAzureServer;
 		default:
 			return constants.PublishTargetType.existingServer;
 	}

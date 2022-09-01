@@ -60,9 +60,9 @@ export class FileNode extends BaseProjectTreeItem {
 		const treeItem = new vscode.TreeItem(this.fileSystemUri, vscode.TreeItemCollapsibleState.None);
 
 		treeItem.command = {
-			title: 'Open file',
-			command: 'vscode.open',
-			arguments: [this.fileSystemUri]
+			title: 'Open file with file watcher',
+			command: 'sqlDatabaseProjects.openFileWithWatcher',
+			arguments: [this.fileSystemUri, this]
 		};
 
 		treeItem.contextValue = DatabaseProjectItemType.file;
@@ -75,6 +75,15 @@ export class ExternalStreamingJobFileNode extends FileNode {
 	public override get treeItem(): vscode.TreeItem {
 		const treeItem = super.treeItem;
 		treeItem.contextValue = DatabaseProjectItemType.externalStreamingJob;
+
+		return treeItem;
+	}
+}
+
+export class TableFileNode extends FileNode {
+	public override get treeItem(): vscode.TreeItem {
+		const treeItem = super.treeItem;
+		treeItem.contextValue = DatabaseProjectItemType.table;
 
 		return treeItem;
 	}

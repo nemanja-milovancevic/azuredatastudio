@@ -4,9 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import AdsTelemetryReporter, { TelemetryEventMeasures, TelemetryEventProperties } from '@microsoft/ads-extension-telemetry';
-import { getPackageInfo } from './api/utils';
 const packageJson = require('../package.json');
-let packageInfo = getPackageInfo(packageJson)!;
+let packageInfo = {
+	name: packageJson.name,
+	version: packageJson.version,
+	aiKey: packageJson.aiKey
+};
 
 export const TelemetryReporter = new AdsTelemetryReporter(packageInfo.name, packageInfo.version, packageInfo.aiKey);
 
@@ -18,8 +21,10 @@ export enum TelemetryViews {
 	IntegrationRuntimePage = 'IntegrationRuntimePage',
 	MigrationCutoverDialog = 'MigrationCutoverDialog',
 	MigrationStatusDialog = 'MigrationStatusDialog',
+	DashboardTab = 'DashboardTab',
+	MigrationsTab = 'MigrationsTab',
 	MigrationWizardAccountSelectionPage = 'MigrationWizardAccountSelectionPage',
-	MigrationWizardTaSkuRecommendationPage = 'MigrationWizardTaSkuRecommendationPage',
+	MigrationWizardSkuRecommendationPage = 'MigrationWizardSkuRecommendationPage',
 	MigrationWizardTargetSelectionPage = 'MigrationWizardTargetSelectionPage',
 	MigrationWizardIntegrationRuntimePage = 'MigrationWizardIntegrationRuntimePage',
 	MigrationWizardSummaryPage = 'MigrationWizardSummaryPage',
@@ -30,6 +35,7 @@ export enum TelemetryViews {
 	SkuRecommendationWizard = 'SkuRecommendationWizard',
 	DataCollectionWizard = 'GetAzureRecommendationDialog',
 	SelectMigrationServiceDialog = 'SelectMigrationServiceDialog',
+	Utils = 'Utils'
 }
 
 export enum TelemetryAction {
@@ -51,6 +57,7 @@ export enum TelemetryAction {
 	OnPageLeave = 'OnPageLeave',
 	GetMISkuRecommendation = 'GetMISkuRecommendation',
 	GetVMSkuRecommendation = 'GetVMSkuRecommendation',
+	GetDBSkuRecommendation = 'GetDBSkuRecommendation',
 	GetInstanceRequirements = 'GetInstanceRequirements',
 	StartDataCollection = 'StartDataCollection',
 	StopDataCollection = 'StopDataCollection'

@@ -4,8 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as DOM from 'vs/base/browser/dom';
-import { Table } from 'sql/base/browser/ui/table/table';
-import { TableDataView } from 'sql/base/browser/ui/table/tableDataView';
 import { ActionBar } from 'sql/base/browser/ui/taskbar/actionbar';
 import { IColorTheme, ICssStyleCollector, IThemeService, registerThemingParticipant } from 'vs/platform/theme/common/themeService';
 import { localize } from 'vs/nls';
@@ -16,8 +14,16 @@ import { sortAlphabeticallyIconClassNames, sortByDisplayOrderIconClassNames, sor
 import { attachTableStyler } from 'sql/platform/theme/common/styler';
 import { RESULTS_GRID_DEFAULTS } from 'sql/workbench/common/constants';
 import { contrastBorder, listHoverBackground } from 'vs/platform/theme/common/colorRegistry';
+import { TreeGrid } from 'sql/base/browser/ui/table/treeGrid';
+import { ISashEvent, IVerticalSashLayoutProvider, Orientation, Sash } from 'vs/base/browser/ui/sash/sash';
+import { CellSelectionModel } from 'sql/base/browser/ui/table/plugins/cellSelectionModel.plugin';
+import { IContextMenuService } from 'vs/platform/contextview/browser/contextView';
+import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
+import { IClipboardService } from 'vs/platform/clipboard/common/clipboardService';
+import { isString } from 'vs/base/common/types';
+import { CopyKeybind } from 'sql/base/browser/ui/table/plugins/copyKeybind.plugin';
 
-export abstract class ExecutionPlanPropertiesViewBase {
+export abstract class ExecutionPlanPropertiesViewBase implements IVerticalSashLayoutProvider {
 	// Title bar with close button action
 	private _titleBarContainer!: HTMLElement;
 	private _titleBarTextContainer!: HTMLElement;
@@ -32,9 +38,7 @@ export abstract class ExecutionPlanPropertiesViewBase {
 	private _headerActions: ActionBar;
 
 	// Properties table
-	private _tableComponent: Table<Slick.SlickData>;
-	private _tableComponentDataView: TableDataView<Slick.SlickData>;
-	private _tableComponentDataModel: { [key: string]: string }[];
+	private _tableComponent: TreeGrid<Slick.SlickData>;
 	private _tableContainer!: HTMLElement;
 
 	private _tableWidth;
@@ -42,16 +46,42 @@ export abstract class ExecutionPlanPropertiesViewBase {
 
 	public sortType: PropertiesSortType = PropertiesSortType.DisplayOrder;
 
+	public resizeSash: Sash;
+
+	private _selectionModel: CellSelectionModel<Slick.SlickData>;
+
 	constructor(
 		public _parentContainer: HTMLElement,
-		private _themeService: IThemeService
+		private _themeService: IThemeService,
+		@IInstantiationService private _instantiationService: IInstantiationService,
+		@IContextMenuService private _contextMenuService: IContextMenuService
 	) {
 
 		const sashContainer = DOM.$('.properties-sash');
 		this._parentContainer.appendChild(sashContainer);
 
+		this.resizeSash = new Sash(sashContainer, this, { orientation: Orientation.VERTICAL, size: 3 });
+		let originalWidth = 0;
+		this.resizeSash.onDidStart((e: ISashEvent) => {
+			originalWidth = this._parentContainer.clientWidth;
+		});
+		this.resizeSash.onDidChange((evt: ISashEvent) => {
+			const change = evt.startX - evt.currentX;
+			const newWidth = originalWidth + change;
+			if (newWidth < 200) {
+				return;
+			}
+			this._parentContainer.style.flex = `0 0 ${newWidth}px`;
+			propertiesContent.style.width = `${newWidth}px`;
+		});
+		this.resizeSash.onDidEnd(() => {
+		});
+
+		const propertiesContent = DOM.$('.properties-content');
+		this._parentContainer.appendChild(propertiesContent);
+
 		this._titleBarContainer = DOM.$('.title');
-		this._parentContainer.appendChild(this._titleBarContainer);
+		propertiesContent.appendChild(this._titleBarContainer);
 
 		this._titleBarTextContainer = DOM.$('h3');
 		this._titleBarTextContainer.classList.add('text');
@@ -67,10 +97,10 @@ export abstract class ExecutionPlanPropertiesViewBase {
 		this._titleActions.pushAction([new ClosePropertyViewAction()], { icon: true, label: false });
 
 		this._headerContainer = DOM.$('.header');
-		this._parentContainer.appendChild(this._headerContainer);
+		propertiesContent.appendChild(this._headerContainer);
 
 		this._headerActionsContainer = DOM.$('.table-action-bar');
-		this._parentContainer.appendChild(this._headerActionsContainer);
+		propertiesContent.appendChild(this._headerActionsContainer);
 		this._headerActions = new ActionBar(this._headerActionsContainer, {
 			orientation: ActionsOrientation.HORIZONTAL, context: this
 		});
@@ -78,26 +108,85 @@ export abstract class ExecutionPlanPropertiesViewBase {
 
 
 		this._tableContainer = DOM.$('.table-container');
-		this._parentContainer.appendChild(this._tableContainer);
+		propertiesContent.appendChild(this._tableContainer);
 
 		const table = DOM.$('.table');
 		this._tableContainer.appendChild(table);
 
-		this._tableComponentDataView = new TableDataView();
-		this._tableComponentDataModel = [];
-		this._tableComponent = new Table(table, {
-			dataProvider: this._tableComponentDataView, columns: []
+		this._selectionModel = new CellSelectionModel<Slick.SlickData>();
+
+		this._tableComponent = new TreeGrid(table, {
+			columns: []
 		}, {
 			rowHeight: RESULTS_GRID_DEFAULTS.rowHeight,
 			forceFitColumns: true,
-			defaultColumnWidth: 120
+			defaultColumnWidth: 120,
+			editable: true,
+			autoEdit: false
 		});
 		attachTableStyler(this._tableComponent, this._themeService);
+		this._tableComponent.setSelectionModel(this._selectionModel);
+
+		const contextMenuAction = [
+			this._instantiationService.createInstance(CopyTableData),
+		];
+
+		this._tableComponent.onContextMenu(e => {
+			this._contextMenuService.showContextMenu({
+				getAnchor: () => e.anchor,
+				getActions: () => contextMenuAction,
+				getActionsContext: () => this.getCopyString()
+			});
+		});
+
+		let copyHandler = new CopyKeybind<any>();
+		this._tableComponent.registerPlugin(copyHandler);
+
+		copyHandler.onCopy(e => {
+			this._instantiationService.createInstance(CopyTableData).run(this.getCopyString());
+		});
 
 		new ResizeObserver((e) => {
+			this.resizeSash.layout();
 			this.resizeTable();
-		}).observe(this._parentContainer);
+		}).observe(_parentContainer);
+	}
 
+
+	public getCopyString(): string {
+		const selectedDataRange = this._selectionModel.getSelectedRanges()[0];
+		let csvString = '';
+		if (selectedDataRange) {
+			const data = [];
+
+			for (let rowIndex = selectedDataRange.fromRow; rowIndex <= selectedDataRange.toRow; rowIndex++) {
+				const dataRow = this._tableComponent.getData().getItem(rowIndex);
+				const row = [];
+				for (let colIndex = selectedDataRange.fromCell; colIndex <= selectedDataRange.toCell; colIndex++) {
+					const dataItem = dataRow[this._tableComponent.grid.getColumns()[colIndex].field];
+					if (dataItem) {
+						row.push(isString(dataItem) ? dataItem : dataItem.displayText ?? dataItem.text ?? dataItem.title);
+					} else {
+						row.push('');
+					}
+				}
+				data.push(row);
+			}
+			csvString = data.map(row =>
+				row.map(x => `${x}`).join('\t')
+			).join('\n');
+		}
+		return csvString;
+	}
+
+	getVerticalSashLeft(sash: Sash): number {
+		return 0;
+	}
+	getVerticalSashTop?(sash: Sash): number {
+		return 0;
+	}
+	getVerticalSashHeight?(sash: Sash): number {
+		return this._parentContainer.clientHeight;
 	}
 
 	public setTitle(v: string): void {
@@ -111,14 +200,12 @@ export abstract class ExecutionPlanPropertiesViewBase {
 	public set tableHeight(value: number) {
 		if (this.tableHeight !== value) {
 			this._tableHeight = value;
-			this.renderView();
 		}
 	}
 
 	public set tableWidth(value: number) {
 		if (this._tableWidth !== value) {
 			this._tableWidth = value;
-			this.renderView();
 		}
 	}
 
@@ -130,23 +217,21 @@ export abstract class ExecutionPlanPropertiesViewBase {
 		return this._tableHeight;
 	}
 
-	public abstract renderView();
+	public abstract refreshPropertiesTable();
 
 	public toggleVisibility(): void {
-		this._parentContainer.style.display = this._parentContainer.style.display === 'none' ? 'block' : 'none';
-		this.renderView();
+		this._parentContainer.style.display = this._parentContainer.style.display === 'none' ? 'flex' : 'none';
 	}
 
 	public populateTable(columns: Slick.Column<Slick.SlickData>[], data: { [key: string]: string }[]) {
 		this._tableComponent.columns = columns;
 		this._tableContainer.scrollTo(0, 0);
-		this._tableComponentDataView.clear();
-		this._tableComponentDataModel = data;
-		this._tableComponentDataView.push(this._tableComponentDataModel);
-		this._tableComponent.setData(this._tableComponentDataView);
-		this._tableComponent.autosizeColumns();
-		this._tableComponent.updateRowCount();
+		this._tableComponent.setData(data);
 		this.resizeTable();
+	}
+
+	public updateTableColumns(columns: Slick.Column<Slick.SlickData>[]) {
+		this._tableComponent.columns = columns;
 	}
 
 	private resizeTable(): void {
@@ -187,7 +272,7 @@ export class SortPropertiesAlphabeticallyAction extends Action {
 
 	public override async run(context: ExecutionPlanPropertiesViewBase): Promise<void> {
 		context.sortType = PropertiesSortType.Alphabetical;
-		context.renderView();
+		context.refreshPropertiesTable();
 	}
 }
 
@@ -201,13 +286,13 @@ export class SortPropertiesReverseAlphabeticallyAction extends Action {
 
 	public override async run(context: ExecutionPlanPropertiesViewBase): Promise<void> {
 		context.sortType = PropertiesSortType.ReverseAlphabetical;
-		context.renderView();
+		context.refreshPropertiesTable();
 	}
 }
 
 export class SortPropertiesByDisplayOrderAction extends Action {
 	public static ID = 'ep.propertiesView.sortByDisplayOrder';
-	public static LABEL = localize('executionPlanPropertyViewSortByDisplayOrder', "Categorized");
+	public static LABEL = localize('executionPlanPropertyViewSortByDisplayOrder', "Importance");
 
 	constructor() {
 		super(SortPropertiesByDisplayOrderAction.ID, SortPropertiesByDisplayOrderAction.LABEL, sortByDisplayOrderIconClassNames);
@@ -215,7 +300,7 @@ export class SortPropertiesByDisplayOrderAction extends Action {
 
 	public override async run(context: ExecutionPlanPropertiesViewBase): Promise<void> {
 		context.sortType = PropertiesSortType.DisplayOrder;
-		context.renderView();
+		context.refreshPropertiesTable();
 	}
 }
 
@@ -249,3 +334,19 @@ registerThemingParticipant((theme: IColorTheme, collector: ICssStyleCollector) =
 	}
 });
 
+
+export class CopyTableData extends Action {
+	public static ID = 'ep.CopyTableData';
+	public static LABEL = localize('ep.topOperationsCopyTableData', "Copy");
+
+	constructor(
+		@IClipboardService private _clipboardService: IClipboardService
+	) {
+		super(CopyTableData.ID, CopyTableData.LABEL, '');
+	}
+
+	public override async run(context: string): Promise<void> {
+
+		this._clipboardService.writeText(context);
+	}
+}

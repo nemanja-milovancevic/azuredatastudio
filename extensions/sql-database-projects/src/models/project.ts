@@ -4,21 +4,29 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as path from 'path';
-import * as xmldom from 'xmldom';
+import * as xmldom from '@xmldom/xmldom';
 import * as constants from '../common/constants';
 import * as utils from '../common/utils';
 import * as xmlFormat from 'xml-formatter';
 import * as os from 'os';
-import * as templates from '../templates/templates';
 import * as UUID from 'vscode-languageclient/lib/utils/uuid';
 
 import { Uri, window } from 'vscode';
-import { ISqlProject, SqlTargetPlatform } from 'sqldbproj';
+import { EntryType, IDatabaseReferenceProjectEntry, IProjectEntry, ISqlProject, ItemType, SqlTargetPlatform } from 'sqldbproj';
 import { promises as fs } from 'fs';
 import { DataSource } from './dataSources/dataSources';
 import { ISystemDatabaseReferenceSettings, IDacpacReferenceSettings, IProjectReferenceSettings } from './IDatabaseReferenceSettings';
 import { TelemetryActions, TelemetryReporter, TelemetryViews } from '../common/telemetry';
-import { DacpacReferenceProjectEntry, EntryType, FileProjectEntry, IDatabaseReferenceProjectEntry, ProjectEntry, SqlCmdVariableProjectEntry, SqlProjectReferenceProjectEntry, SystemDatabase, SystemDatabaseReferenceProjectEntry } from './projectEntry';
+import { DacpacReferenceProjectEntry, FileProjectEntry, ProjectEntry, SqlCmdVariableProjectEntry, SqlProjectReferenceProjectEntry, SystemDatabase, SystemDatabaseReferenceProjectEntry } from './projectEntry';
+
+/**
+ * Represents the configuration based on the Configuration property in the sqlproj
+ */
+enum Configuration {
+	Debug = 'Debug',     // default used if the Configuration property is not specified
+	Release = 'Release',
+	Output = 'Output'    // if a string besides debug or release is used, then Output is used as the configuration
+}
 
 /**
  * Class representing a Project, and providing functions for operating on it
@@ -36,9 +44,11 @@ export class Project implements ISqlProject {
 	private _postDeployScripts: FileProjectEntry[] = [];
 	private _noneDeployScripts: FileProjectEntry[] = [];
 	private _isSdkStyleProject: boolean = false; // https://docs.microsoft.com/en-us/dotnet/core/project-sdk/overview
+	private _outputPath: string = '';
+	private _configuration: Configuration = Configuration.Debug;
 
 	public get dacpacOutputPath(): string {
-		return path.join(this.projectFolderPath, 'bin', 'Debug', `${this._projectFileName}.dacpac`);
+		return path.join(this.outputPath, `${this._projectFileName}.dacpac`);
 	}
 
 	public get projectFolderPath() {
@@ -91,6 +101,14 @@ export class Project implements ISqlProject {
 
 	public get isSdkStyleProject(): boolean {
 		return this._isSdkStyleProject;
+	}
+
+	public get outputPath(): string {
+		return this._outputPath;
+	}
+
+	public get configuration(): Configuration {
+		return this._configuration;
 	}
 
 	private projFileXmlDoc: Document | undefined = undefined;
@@ -154,6 +172,67 @@ export class Project implements ISqlProject {
 			newProjectGuidNode.appendChild(newProjectGuidTextNode);
 			this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.PropertyGroup)[0]?.appendChild(newProjectGuidNode);
 			await this.serializeToProjFile(this.projFileXmlDoc);
+		}
+
+		// get configuration
+		const configurationNodes = this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.Configuration);
+		if (configurationNodes.length > 0) {
+			const configuration = this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.Configuration)[0].childNodes[0].nodeValue!;
+			switch (configuration.toLowerCase()) {
+				case Configuration.Debug.toString().toLowerCase():
+					this._configuration = Configuration.Debug;
+					break;
+				case Configuration.Release.toString().toLowerCase():
+					this._configuration = Configuration.Release;
+					break;
+				default:
+					// if the configuration doesn't match release or debug, the dacpac will get created in ./bin/Output
+					this._configuration = Configuration.Output;
+			}
+		} else {
+			// If configuration isn't specified in .sqlproj, set it to the default debug
+			this._configuration = Configuration.Debug;
+		}
+
+		// get platform
+		const platformNodes = this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.Platform);
+		let platform = '';
+		if (platformNodes.length > 0) {
+			for (let i = 0; i < platformNodes.length; i++) {
+				const condition = platformNodes[i].getAttribute(constants.Condition);
+				if (condition?.trim() === constants.EmptyPlatformCondition.trim()) {
+					platform = platformNodes[i].childNodes[0].nodeValue ?? '';
+					break;
+				}
+			}
+		} else {
+			platform = constants.AnyCPU;
+		}
+
+		// get output path
+		let outputPath;
+		const outputPathNodes = this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.OutputPath);
+		if (outputPathNodes.length > 0) {
+			// go through all the OutputPath nodes and use the last one in the .sqlproj that the condition matches
+			for (let i = 0; i < outputPathNodes.length; i++) {
+				// check if parent has a condition
+				const parent = outputPathNodes[i].parentNode as Element;
+				const condition = parent?.getAttribute(constants.Condition);
+
+				// only handle the default conditions format that are there when creating a sqlproj in VS or ADS
+				if (condition?.toLowerCase().trim() === constants.ConfigurationPlatformCondition(this.configuration.toString(), platform).toLowerCase()) {
+					outputPath = outputPathNodes[i].childNodes[0].nodeValue;
+				} else if (!condition) {
+					outputPath = outputPathNodes[i].childNodes[0].nodeValue;
+				}
+			}
+		}
+
+		if (outputPath) {
+			this._outputPath = path.join(utils.getPlatformSafeFileEntryPath(this.projectFolderPath), utils.getPlatformSafeFileEntryPath(outputPath));
+		} else {
+			// If output path isn't specified in .sqlproj, set it to the default output path .\bin\Debug\
+			this._outputPath = path.join(utils.getPlatformSafeFileEntryPath(this.projectFolderPath), utils.getPlatformSafeFileEntryPath(constants.defaultOutputPath(this.configuration.toString())));
 		}
 	}
 
@@ -246,10 +325,15 @@ export class Project implements ISqlProject {
 
 		// create a FileProjectEntry for each file
 		const fileEntries: FileProjectEntry[] = [];
-		filesSet.forEach(f => {
+		for (let f of Array.from(filesSet.values())) {
 			const typeEntry = entriesWithType.find(e => e.relativePath === f);
-			fileEntries.push(this.createFileProjectEntry(f, EntryType.File, typeEntry ? typeEntry.typeAttribute : undefined));
-		});
+
+			// read file to check if it has a "Create Table" statement
+			const fullPath = path.join(utils.getPlatformSafeFileEntryPath(this.projectFolderPath), utils.getPlatformSafeFileEntryPath(f));
+			const containsCreateTableStatement = await utils.fileContainsCreateTableStatement(fullPath, this.getProjectTargetVersion());
+
+			fileEntries.push(this.createFileProjectEntry(f, EntryType.File, typeEntry ? typeEntry.typeAttribute : undefined, containsCreateTableStatement));
+		}
 
 		return fileEntries;
 	}
@@ -524,6 +608,8 @@ export class Project implements ISqlProject {
 		this._postDeployScripts = [];
 		this._noneDeployScripts = [];
 		this.projFileXmlDoc = undefined;
+		this._outputPath = '';
+		this._configuration = Configuration.Debug;
 	}
 
 	/**
@@ -661,8 +747,42 @@ export class Project implements ISqlProject {
 				}
 			}
 
-			const parent = importsToRemove[0]?.parentNode;
-			importsToRemove.forEach(i => { parent?.removeChild(i); });
+			const importsParent = importsToRemove[0]?.parentNode;
+			importsToRemove.forEach(i => {
+				importsParent?.removeChild(i);
+			});
+
+			// remove VisualStudio properties
+			const vsPropsToRemove = [];
+			for (let i = 0; i < this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.VisualStudioVersion).length; i++) {
+				const visualStudioVersionNode = this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.VisualStudioVersion)[i];
+				const conditionAttributeVal = visualStudioVersionNode.getAttribute(constants.Condition);
+
+				if (conditionAttributeVal === constants.VSVersionCondition || conditionAttributeVal === constants.SsdtExistsCondition) {
+					vsPropsToRemove.push(visualStudioVersionNode);
+				}
+			}
+
+			for (let i = 0; i < this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.SSDTExists).length; i++) {
+				const ssdtExistsNode = this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.SSDTExists)[i];
+				const conditionAttributeVal = ssdtExistsNode.getAttribute(constants.Condition);
+
+				if (conditionAttributeVal === constants.targetsExistsCondition) {
+					vsPropsToRemove.push(ssdtExistsNode);
+				}
+			}
+
+			const vsPropsParent = vsPropsToRemove[0]?.parentNode;
+			vsPropsToRemove.forEach(i => {
+				vsPropsParent?.removeChild(i);
+
+				// Remove the parent PropertyGroup if there aren't any other nodes. Only count element nodes, not text nodes
+				const otherChildren = Array.from(vsPropsParent!.childNodes).filter((c: ChildNode) => c.childNodes);
+
+				if (otherChildren.length === 0) {
+					vsPropsParent!.parentNode?.removeChild(vsPropsParent!);
+				}
+			});
 
 			// add SDK node
 			const sdkNode = this.projFileXmlDoc!.createElement(constants.Sdk);
@@ -773,11 +893,11 @@ export class Project implements ISqlProject {
 
 		let xmlTag;
 		switch (itemType) {
-			case templates.preDeployScript:
+			case ItemType.preDeployScript:
 				xmlTag = constants.PreDeploy;
 				this._preDeployScripts.length === 0 ? this._preDeployScripts.push(fileEntry) : this._noneDeployScripts.push(fileEntry);
 				break;
-			case templates.postDeployScript:
+			case ItemType.postDeployScript:
 				xmlTag = constants.PostDeploy;
 				this._postDeployScripts.length === 0 ? this._postDeployScripts.push(fileEntry) : this._noneDeployScripts.push(fileEntry);
 				break;
@@ -788,7 +908,7 @@ export class Project implements ISqlProject {
 
 		const attributes = new Map<string, string>();
 
-		if (itemType === templates.externalStreamingJob) {
+		if (itemType === ItemType.externalStreamingJob) {
 			fileEntry.sqlObjectType = constants.ExternalStreamingJob;
 			attributes.set(constants.Type, constants.ExternalStreamingJob);
 		}
@@ -1045,13 +1165,14 @@ export class Project implements ISqlProject {
 		return this.getCollectionProjectPropertyValue(constants.DatabaseSource);
 	}
 
-	public createFileProjectEntry(relativePath: string, entryType: EntryType, sqlObjectType?: string): FileProjectEntry {
+	public createFileProjectEntry(relativePath: string, entryType: EntryType, sqlObjectType?: string, containsCreateTableStatement?: boolean): FileProjectEntry {
 		let platformSafeRelativePath = utils.getPlatformSafeFileEntryPath(relativePath);
 		return new FileProjectEntry(
 			Uri.file(path.join(this.projectFolderPath, platformSafeRelativePath)),
 			utils.convertSlashesForSqlProj(relativePath),
 			entryType,
-			sqlObjectType);
+			sqlObjectType,
+			containsCreateTableStatement);
 	}
 
 	private findOrCreateItemGroup(containedTag?: string, prePostScriptExist?: { scriptExist: boolean; }): Element {
@@ -1231,7 +1352,7 @@ export class Project implements ISqlProject {
 	 */
 	private async undoExcludeFileFromProjFile(xmlTag: string, relativePath: string): Promise<void> {
 		const nodes = this.projFileXmlDoc!.documentElement.getElementsByTagName(xmlTag);
-		if (await this.removeNode(relativePath, nodes, true)) {
+		if (this.removeNode(relativePath, nodes, true)) {
 			await this.serializeToProjFile(this.projFileXmlDoc!);
 		}
 	}
@@ -1539,12 +1660,15 @@ export class Project implements ISqlProject {
 				const suppressMissingDependenciesErrorNode = currentNode.getElementsByTagName(constants.SuppressMissingDependenciesErrors);
 				const suppressMissingDependences = suppressMissingDependenciesErrorNode[0].childNodes[0].nodeValue === constants.True;
 
-				// remove this node
-				this.projFileXmlDoc!.documentElement.removeChild(currentNode);
-
-				// delete ItemGroup if there aren't any other children
-				if (this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.ArtifactReference).length === 0) {
+				// TODO Two issues here :
+				// 1. If there are multiple ItemGroups with ArtifactReference items then we won't clean up until all items are removed
+				// 2. If the ItemGroup has other non-ArtifactReference items in it then those will be deleted
+				// Right now we assume that this ItemGroup is not manually edited so it's safe to ignore these
+				if (this.projFileXmlDoc!.documentElement.getElementsByTagName(constants.ArtifactReference).length === 1) {
+					// delete entire ItemGroup if there aren't any other children
 					this.projFileXmlDoc!.documentElement.removeChild(currentNode.parentNode!);
+				} else {
+					this.projFileXmlDoc!.documentElement.removeChild(currentNode);
 				}
 
 				// remove from database references because it'll get added again later
@@ -1578,8 +1702,8 @@ export class Project implements ISqlProject {
 		await this.serializeToProjFile(this.projFileXmlDoc!);
 	}
 
-	private async removeFromProjFile(entries: ProjectEntry | ProjectEntry[]): Promise<void> {
-		if (entries instanceof ProjectEntry) {
+	private async removeFromProjFile(entries: IProjectEntry | IProjectEntry[]): Promise<void> {
+		if (!Array.isArray(entries)) {
 			entries = [entries];
 		}
 

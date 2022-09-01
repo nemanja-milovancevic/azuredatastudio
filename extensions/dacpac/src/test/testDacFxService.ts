@@ -58,88 +58,21 @@ export class DacFxTestService implements mssql.IDacFxService {
 		return Promise.resolve(deployPlan);
 	}
 	getOptionsFromProfile(profilePath: string): Promise<mssql.DacFxOptionsResult> {
+		const sampleDesc = 'Sample Description text';
+		const sampleName = 'Sample Display Name';
 		const optionsResult: mssql.DacFxOptionsResult = {
 			success: true,
 			errorMessage: '',
 			deploymentOptions: {
-				ignoreTableOptions: false,
-				ignoreSemicolonBetweenStatements: false,
-				ignoreRouteLifetime: false,
-				ignoreRoleMembership: false,
-				ignoreQuotedIdentifiers: false,
-				ignorePermissions: false,
-				ignorePartitionSchemes: false,
-				ignoreObjectPlacementOnPartitionScheme: false,
-				ignoreNotForReplication: false,
-				ignoreLoginSids: false,
-				ignoreLockHintsOnIndexes: false,
-				ignoreKeywordCasing: false,
-				ignoreIndexPadding: false,
-				ignoreIndexOptions: false,
-				ignoreIncrement: false,
-				ignoreIdentitySeed: false,
-				ignoreUserSettingsObjects: false,
-				ignoreFullTextCatalogFilePath: false,
-				ignoreWhitespace: false,
-				ignoreWithNocheckOnForeignKeys: false,
-				verifyCollationCompatibility: false,
-				unmodifiableObjectWarnings: false,
-				treatVerificationErrorsAsWarnings: false,
-				scriptRefreshModule: false,
-				scriptNewConstraintValidation: false,
-				scriptFileSize: false,
-				scriptDeployStateChecks: false,
-				scriptDatabaseOptions: false,
-				scriptDatabaseCompatibility: false,
-				scriptDatabaseCollation: false,
-				runDeploymentPlanExecutors: false,
-				registerDataTierApplication: false,
-				populateFilesOnFileGroups: false,
-				noAlterStatementsToChangeClrTypes: false,
-				includeTransactionalScripts: false,
-				includeCompositeObjects: false,
-				allowUnsafeRowLevelSecurityDataMovement: false,
-				ignoreWithNocheckOnCheckConstraints: false,
-				ignoreFillFactor: false,
-				ignoreFileSize: false,
-				ignoreFilegroupPlacement: false,
-				doNotAlterReplicatedObjects: false,
-				doNotAlterChangeDataCaptureObjects: false,
-				disableAndReenableDdlTriggers: false,
-				deployDatabaseInSingleUserMode: false,
-				createNewDatabase: false,
-				compareUsingTargetCollation: false,
-				commentOutSetVarDeclarations: false,
-				blockWhenDriftDetected: false,
-				blockOnPossibleDataLoss: false,
-				backupDatabaseBeforeChanges: false,
-				allowIncompatiblePlatform: false,
-				allowDropBlockingAssemblies: false,
-				dropConstraintsNotInSource: false,
-				dropDmlTriggersNotInSource: false,
-				dropExtendedPropertiesNotInSource: false,
-				dropIndexesNotInSource: false,
-				ignoreFileAndLogFilePath: false,
-				ignoreExtendedProperties: false,
-				ignoreDmlTriggerState: false,
-				ignoreDmlTriggerOrder: false,
-				ignoreDefaultSchema: false,
-				ignoreDdlTriggerState: false,
-				ignoreDdlTriggerOrder: false,
-				ignoreCryptographicProviderFilePath: false,
-				verifyDeployment: false,
-				ignoreComments: false,
-				ignoreColumnCollation: false,
-				ignoreAuthorizer: false,
-				ignoreAnsiNulls: false,
-				generateSmartDefaults: false,
-				dropStatisticsNotInSource: false,
-				dropRoleMembersNotInSource: false,
-				dropPermissionsNotInSource: false,
-				dropObjectsNotInSource: false,
-				ignoreColumnOrder: false,
-				doNotDropObjectTypes: [],
-				excludeObjectTypes: []
+				excludeObjectTypes: { value: [], description: sampleDesc, displayName: sampleName },
+				booleanOptionsDictionary: {
+					'SampleProperty1': { value: false, description: sampleDesc, displayName: sampleName },
+					'SampleProperty2': { value: false, description: sampleDesc, displayName: sampleName }
+				},
+				objectTypesDictionary: {
+					'ObjectType1': sampleName,
+					'ObjectType2': sampleName
+				}
 			}
 		};
 
@@ -152,5 +85,8 @@ export class DacFxTestService implements mssql.IDacFxService {
 			errorMessage: ''
 		};
 		return Promise.resolve(streamingJobValidationResult);
+	}
+	parseTSqlScript(filePath: string, databaseSchemaProvider: string): Thenable<mssql.ParseTSqlScriptResult> {
+		return Promise.resolve({ containsCreateTableStatement: true });
 	}
 }

@@ -3,13 +3,36 @@
  *  Licensed under the Source EULA. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { window, CategoryValue, DropDownComponent, IconPath } from 'azdata';
+import { window, Account, accounts, CategoryValue, DropDownComponent, IconPath, DisplayType, Component } from 'azdata';
+import * as vscode from 'vscode';
 import { IconPathHelper } from '../constants/iconPathHelper';
-import { DAYS, HRS, MINUTE, SEC } from '../constants/strings';
-import { AdsMigrationStatus } from '../dialog/migrationStatus/migrationStatusDialogModel';
-import { MigrationStatus, ProvisioningState } from '../models/migrationLocalStorage';
 import * as crypto from 'crypto';
-import { DatabaseMigration } from './azure';
+import * as azure from './azure';
+import { azureResource, Tenant } from 'azurecore';
+import * as constants from '../constants/strings';
+import { logError, TelemetryViews } from '../telemtery';
+import { AdsMigrationStatus } from '../dashboard/tabBase';
+import { getMigrationMode, getMigrationStatus, getMigrationTargetType, PipelineStatusCodes } from '../constants/helper';
+
+export type TargetServerType = azure.SqlVMServer | azureResource.AzureSqlManagedInstance | azure.AzureSqlDatabaseServer;
+
+export const SqlMigrationExtensionId = 'microsoft.sql-migration';
+export const DefaultSettingValue = '---';
+
+export const MenuCommands = {
+	Cutover: 'sqlmigration.cutover',
+	ViewDatabase: 'sqlmigration.view.database',
+	ViewTarget: 'sqlmigration.view.target',
+	ViewService: 'sqlmigration.view.service',
+	CopyMigration: 'sqlmigration.copy.migration',
+	CancelMigration: 'sqlmigration.cancel.migration',
+	RetryMigration: 'sqlmigration.retry.migration',
+	StartMigration: 'sqlmigration.start',
+	IssueReporter: 'workbench.action.openIssueReporter',
+	OpenNotebooks: 'sqlmigration.openNotebooks',
+	NewSupportRequest: 'sqlmigration.newsupportrequest',
+	SendFeedback: 'sqlmigration.sendfeedback',
+};
 
 export function deepClone<T>(obj: T): T {
 	if (!obj || typeof obj !== 'object') {
@@ -77,47 +100,81 @@ export function convertTimeDifferenceToDuration(startTime: Date, endTime: Date):
 	let hours = (time / (1000 * 60 * 60)).toFixed(1);
 	let days = (time / (1000 * 60 * 60 * 24)).toFixed(1);
 	if (time / 1000 < 60) {
-		return SEC(parseFloat(seconds));
+		return constants.SEC(parseFloat(seconds));
 	}
 	else if (time / (1000 * 60) < 60) {
-		return MINUTE(parseFloat(minutes));
+		return constants.MINUTE(parseFloat(minutes));
 	}
 	else if (time / (1000 * 60 * 60) < 24) {
-		return HRS(parseFloat(hours));
+		return constants.HRS(parseFloat(hours));
 	}
 	else {
-		return DAYS(parseFloat(days));
+		return constants.DAYS(parseFloat(days));
 	}
 }
 
-export function filterMigrations(databaseMigrations: DatabaseMigration[], statusFilter: string, databaseNameFilter?: string): DatabaseMigration[] {
-	let filteredMigration: DatabaseMigration[] = [];
-	if (statusFilter === AdsMigrationStatus.ALL) {
-		filteredMigration = databaseMigrations;
-	} else if (statusFilter === AdsMigrationStatus.ONGOING) {
-		filteredMigration = databaseMigrations.filter(
-			value => {
-				const status = value.properties?.migrationStatus;
-				return status === MigrationStatus.InProgress
-					|| status === MigrationStatus.Creating
-					|| value.properties?.provisioningState === MigrationStatus.Creating;
-			});
-	} else if (statusFilter === AdsMigrationStatus.SUCCEEDED) {
-		filteredMigration = databaseMigrations.filter(
-			value => value.properties?.migrationStatus === MigrationStatus.Succeeded);
-	} else if (statusFilter === AdsMigrationStatus.FAILED) {
-		filteredMigration = databaseMigrations.filter(
-			value =>
-				value.properties?.migrationStatus === MigrationStatus.Failed ||
-				value.properties?.provisioningState === ProvisioningState.Failed);
-	} else if (statusFilter === AdsMigrationStatus.COMPLETING) {
-		filteredMigration = databaseMigrations.filter(
-			value => value.properties?.migrationStatus === MigrationStatus.Completing);
+export function getMigrationTime(migrationTime: string): string {
+	return migrationTime
+		? new Date(migrationTime).toLocaleString()
+		: DefaultSettingValue;
+}
+
+export function getMigrationDuration(startDate: string, endDate: string): string {
+	if (startDate) {
+		if (endDate) {
+			return convertTimeDifferenceToDuration(
+				new Date(startDate),
+				new Date(endDate));
+		} else {
+			return convertTimeDifferenceToDuration(
+				new Date(startDate),
+				new Date());
+		}
 	}
-	if (databaseNameFilter) {
-		const filter = databaseNameFilter.toLowerCase();
+
+	return DefaultSettingValue;
+}
+
+export function filterMigrations(databaseMigrations: azure.DatabaseMigration[], statusFilter: string, columnTextFilter?: string): azure.DatabaseMigration[] {
+	let filteredMigration: azure.DatabaseMigration[] = databaseMigrations || [];
+	if (columnTextFilter) {
+		const filter = columnTextFilter.toLowerCase();
 		filteredMigration = filteredMigration.filter(
-			migration => migration.name?.toLowerCase().includes(filter));
+			migration => migration.properties.sourceServerName?.toLowerCase().includes(filter)
+				|| migration.properties.sourceDatabaseName?.toLowerCase().includes(filter)
+				|| getMigrationStatus(migration)?.toLowerCase().includes(filter)
+				|| getMigrationMode(migration)?.toLowerCase().includes(filter)
+				|| getMigrationTargetType(migration)?.toLowerCase().includes(filter)
+				|| azure.getResourceName(migration.properties.scope)?.toLowerCase().includes(filter)
+				|| azure.getResourceName(migration.id)?.toLowerCase().includes(filter)
+				|| getMigrationDuration(
+					migration.properties.startedOn,
+					migration.properties.endedOn)?.toLowerCase().includes(filter)
+				|| getMigrationTime(migration.properties.startedOn)?.toLowerCase().includes(filter)
+				|| getMigrationTime(migration.properties.endedOn)?.toLowerCase().includes(filter)
+				|| getMigrationMode(migration)?.toLowerCase().includes(filter));
+	}
+
+	switch (statusFilter) {
+		case AdsMigrationStatus.ALL:
+			return filteredMigration;
+		case AdsMigrationStatus.ONGOING:
+			return filteredMigration.filter(
+				value => {
+					const status = getMigrationStatus(value);
+					return status === constants.MigrationStatus.InProgress
+						|| status === constants.MigrationStatus.Retriable
+						|| status === constants.MigrationStatus.Creating;
+				});
+		case AdsMigrationStatus.SUCCEEDED:
+			return filteredMigration.filter(
+				value => getMigrationStatus(value) === constants.MigrationStatus.Succeeded);
+		case AdsMigrationStatus.FAILED:
+			return filteredMigration.filter(
+				value => getMigrationStatus(value) === constants.MigrationStatus.Failed);
+		case AdsMigrationStatus.COMPLETING:
+			return filteredMigration.filter(
+				value => getMigrationStatus(value) === constants.MigrationStatus.Completing);
 	}
 	return filteredMigration;
 }
@@ -141,12 +198,19 @@ export function convertIsoTimeToLocalTime(isoTime: string): Date {
 
 export function selectDefaultDropdownValue(dropDown: DropDownComponent, value?: string, useDisplayName: boolean = true): void {
 	if (dropDown.values && dropDown.values.length > 0) {
-		const selectedIndex = value ? findDropDownItemIndex(dropDown, value, useDisplayName) : -1;
-		if (selectedIndex > -1) {
-			selectDropDownIndex(dropDown, selectedIndex);
+		let selectedIndex;
+		if (value) {
+			if (useDisplayName) {
+				selectedIndex = dropDown.values.findIndex((v: any) => (v as CategoryValue)?.displayName?.toLowerCase() === value.toLowerCase());
+			} else {
+				selectedIndex = dropDown.values.findIndex((v: any) => (v as CategoryValue)?.name?.toLowerCase() === value.toLowerCase());
+			}
 		} else {
-			selectDropDownIndex(dropDown, 0);
+			selectedIndex = -1;
 		}
+		selectDropDownIndex(dropDown, selectedIndex > -1 ? selectedIndex : 0);
+	} else {
+		dropDown.value = undefined;
 	}
 }
 
@@ -158,18 +222,6 @@ export function selectDropDownIndex(dropDown: DropDownComponent, index: number):
 		}
 	}
 	dropDown.value = undefined;
-}
-
-export function findDropDownItemIndex(dropDown: DropDownComponent, value: string, useDisplayName: boolean = true): number {
-	if (value && dropDown.values && dropDown.values.length > 0) {
-		const searachValue = value?.toLowerCase();
-		return useDisplayName
-			? dropDown.values.findIndex((v: any) =>
-				(v as CategoryValue)?.displayName?.toLowerCase() === searachValue)
-			: dropDown.values.findIndex((v: any) =>
-				(v as CategoryValue)?.name?.toLowerCase() === searachValue);
-	}
-	return -1;
 }
 
 export function hashString(value: string): string {
@@ -213,24 +265,79 @@ export function decorate(decorator: (fn: Function, key: string) => Function): Fu
 }
 
 export function getSessionIdHeader(sessionId: string): { [key: string]: string } {
-	return {
-		'SqlMigrationSessionId': sessionId
-	};
+	return { 'SqlMigrationSessionId': sessionId };
 }
 
-export function getMigrationStatusImage(status: string): IconPath {
+export function getMigrationStatusWithErrors(migration: azure.DatabaseMigration): string {
+	const properties = migration.properties;
+	const migrationStatus = getMigrationStatus(migration) ?? '';
+
+	// provisioning error
+	let warningCount = properties.provisioningError?.length > 0 ? 1 : 0;
+
+	// migration failure error
+	warningCount += properties.migrationFailureError?.message?.length > 0 ? 1 : 0;
+
+	// file upload blocking errors
+	warningCount += properties.migrationStatusDetails?.fileUploadBlockingErrors?.length ?? 0;
+
+	// restore blocking reason
+	warningCount += properties.migrationStatusDetails?.restoreBlockingReason ? 1 : 0;
+
+	// sql data copy errors
+	warningCount += properties.migrationStatusDetails?.sqlDataCopyErrors?.length ?? 0;
+
+	return constants.STATUS_VALUE(migrationStatus, warningCount)
+		+ (constants.STATUS_WARNING_COUNT(migrationStatus, warningCount) ?? '');
+}
+
+export function getPipelineStatusImage(status: string | undefined): IconPath {
+	// status codes: 'PreparingForCopy' | 'Copying' | 'CopyFinished' | 'RebuildingIndexes' | 'Succeeded' | 'Failed' |	'Canceled',
 	switch (status) {
-		case MigrationStatus.InProgress:
+		case PipelineStatusCodes.Copying:				// Copying: 'Copying',
+			return IconPathHelper.copy;
+		case PipelineStatusCodes.CopyFinished:			// CopyFinished: 'CopyFinished',
+		case PipelineStatusCodes.RebuildingIndexes:		// RebuildingIndexes: 'RebuildingIndexes',
 			return IconPathHelper.inProgressMigration;
-		case MigrationStatus.Succeeded:
-			return IconPathHelper.completedMigration;
-		case MigrationStatus.Creating:
-			return IconPathHelper.notStartedMigration;
-		case MigrationStatus.Completing:
-			return IconPathHelper.completingCutover;
-		case MigrationStatus.Canceling:
+		case PipelineStatusCodes.Canceled:				// Canceled: 'Canceled',
 			return IconPathHelper.cancel;
-		case MigrationStatus.Failed:
+		case PipelineStatusCodes.PreparingForCopy:		// PreparingForCopy: 'PreparingForCopy',
+			return IconPathHelper.notStartedMigration;
+		case PipelineStatusCodes.Failed:				// Failed: 'Failed',
+			return IconPathHelper.error;
+		case PipelineStatusCodes.Succeeded:				// Succeeded: 'Succeeded',
+			return IconPathHelper.completedMigration;
+
+		// legacy status codes:  Queued: 'Queued', InProgress: 'InProgress',Cancelled: 'Cancelled',
+		case PipelineStatusCodes.Queued:
+			return IconPathHelper.notStartedMigration;
+		case PipelineStatusCodes.InProgress:
+			return IconPathHelper.inProgressMigration;
+		case PipelineStatusCodes.Cancelled:
+			return IconPathHelper.cancel;
+		// default:
+		default:
+			return IconPathHelper.error;
+	}
+}
+
+export function getMigrationStatusImage(migration: azure.DatabaseMigration): IconPath {
+	const status = getMigrationStatus(migration);
+	switch (status) {
+		case constants.MigrationStatus.InProgress:
+			return IconPathHelper.inProgressMigration;
+		case constants.MigrationStatus.Succeeded:
+			return IconPathHelper.completedMigration;
+		case constants.MigrationStatus.Creating:
+			return IconPathHelper.notStartedMigration;
+		case constants.MigrationStatus.Completing:
+			return IconPathHelper.completingCutover;
+		case constants.MigrationStatus.Retriable:
+			return IconPathHelper.retry;
+		case constants.MigrationStatus.Canceling:
+		case constants.MigrationStatus.Canceled:
+			return IconPathHelper.cancel;
+		case constants.MigrationStatus.Failed:
 		default:
 			return IconPathHelper.error;
 	}
@@ -260,4 +367,369 @@ export function clearDialogMessage(dialog: window.Dialog): void {
 
 export function getUserHome(): string | undefined {
 	return process.env.HOME || process.env.USERPROFILE;
+}
+
+export async function getAzureAccounts(): Promise<Account[]> {
+	let azureAccounts: Account[] = [];
+	try {
+		azureAccounts = await accounts.getAllAccounts();
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getAzureAccounts', e);
+	}
+	return azureAccounts;
+}
+
+export async function getAzureAccountsDropdownValues(accounts: Account[]): Promise<CategoryValue[]> {
+	let accountsValues: CategoryValue[] = [];
+	accounts.forEach((account) => {
+		accountsValues.push({
+			name: account.displayInfo.userId,
+			displayName: account.isStale
+				? constants.ACCOUNT_CREDENTIALS_REFRESH(account.displayInfo.displayName)
+				: account.displayInfo.displayName
+		});
+	});
+	if (accountsValues.length === 0) {
+		accountsValues = [
+			{
+				displayName: constants.ACCOUNT_SELECTION_PAGE_NO_LINKED_ACCOUNTS_ERROR,
+				name: ''
+			}
+		];
+	}
+	return accountsValues;
+}
+
+export function getAzureTenants(account?: Account): Tenant[] {
+	return account?.properties.tenants || [];
+}
+
+export async function getAzureSubscriptions(account?: Account): Promise<azureResource.AzureResourceSubscription[]> {
+	let subscriptions: azureResource.AzureResourceSubscription[] = [];
+	try {
+		if (account) {
+			subscriptions = !account.isStale ? await azure.getSubscriptions(account) : [];
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getAzureSubscriptions', e);
+	}
+	subscriptions.sort((a, b) => a.name.localeCompare(b.name));
+	return subscriptions;
+}
+
+export async function getAzureSubscriptionsDropdownValues(subscriptions: azureResource.AzureResourceSubscription[]): Promise<CategoryValue[]> {
+	let subscriptionsValues: CategoryValue[] = [];
+	subscriptions.forEach((subscription) => {
+		subscriptionsValues.push({
+			name: subscription.id,
+			displayName: `${subscription.name} - ${subscription.id}`
+		});
+	});
+	if (subscriptionsValues.length === 0) {
+		subscriptionsValues = [
+			{
+				displayName: constants.NO_SUBSCRIPTIONS_FOUND,
+				name: ''
+			}
+		];
+	}
+	return subscriptionsValues;
+}
+
+export async function getResourceLocations(
+	account?: Account,
+	subscription?: azureResource.AzureResourceSubscription,
+	resources?: { location: string }[]): Promise<azureResource.AzureLocation[]> {
+
+	try {
+		if (account && subscription && resources) {
+			const locations = await azure.getLocations(account, subscription);
+			return locations
+				.filter((loc, i) => resources.some(resource => resource.location.toLowerCase() === loc.name.toLowerCase()))
+				.sort((a, b) => a.displayName.localeCompare(b.displayName));
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getResourceLocations', e);
+	}
+	return [];
+}
+
+export function getServiceResourceGroupsByLocation(
+	resources: { location: string, id: string, tenantId?: string }[],
+	location: azureResource.AzureLocation): azureResource.AzureResourceResourceGroup[] {
+
+	let resourceGroups: azureResource.AzureResourceResourceGroup[] = [];
+	if (resources && location) {
+		const locationName = location.name.toLowerCase();
+		resourceGroups = resources
+			.filter(resource => resource.location.toLowerCase() === locationName)
+			.map(resource => {
+				return <azureResource.AzureResourceResourceGroup>{
+					id: azure.getFullResourceGroupFromId(resource.id),
+					name: azure.getResourceGroupFromId(resource.id),
+					subscription: { id: getSubscriptionIdFromResourceId(resource.id) },
+					tenant: resource.tenantId
+				};
+			});
+	}
+
+	// remove duplicates
+	return resourceGroups
+		.filter((v, i, a) => a.findIndex(v2 => (v2.id === v.id)) === i)
+		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function getSubscriptionIdFromResourceId(resourceId: string): string | undefined {
+	let parts = resourceId?.split('/subscriptions/');
+	if (parts?.length > 1) {
+		parts = parts[1]?.split('/resourcegroups/');
+		if (parts?.length > 0) {
+			return parts[0];
+		}
+	}
+	return undefined;
+}
+
+export async function getAllResourceGroups(account?: Account, subscription?: azureResource.AzureResourceSubscription): Promise<azureResource.AzureResourceResourceGroup[]> {
+	let resourceGroups: azureResource.AzureResourceResourceGroup[] = [];
+	try {
+		if (account && subscription) {
+			resourceGroups = await azure.getResourceGroups(account, subscription);
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getAllResourceGroups', e);
+	}
+	resourceGroups.sort((a, b) => a.name.localeCompare(b.name));
+	return resourceGroups;
+}
+
+export async function getManagedInstances(account?: Account, subscription?: azureResource.AzureResourceSubscription): Promise<azureResource.AzureSqlManagedInstance[]> {
+	let managedInstances: azureResource.AzureSqlManagedInstance[] = [];
+	try {
+		if (account && subscription) {
+			managedInstances = await azure.getAvailableManagedInstanceProducts(account, subscription);
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getManagedInstances', e);
+	}
+	managedInstances.sort((a, b) => a.name.localeCompare(b.name));
+	return managedInstances;
+}
+
+export async function getManagedInstancesDropdownValues(managedInstances: azureResource.AzureSqlManagedInstance[], location: azureResource.AzureLocation, resourceGroup: azureResource.AzureResourceResourceGroup): Promise<CategoryValue[]> {
+	let managedInstancesValues: CategoryValue[] = [];
+	if (location && resourceGroup) {
+		managedInstances.forEach((managedInstance) => {
+			if (managedInstance.location.toLowerCase() === location.name.toLowerCase() && managedInstance.resourceGroup?.toLowerCase() === resourceGroup.name.toLowerCase()) {
+				let managedInstanceValue: CategoryValue;
+				if (managedInstance.properties.state === 'Ready') {
+					managedInstanceValue = {
+						name: managedInstance.id,
+						displayName: managedInstance.name
+					};
+				} else {
+					managedInstanceValue = {
+						name: managedInstance.id,
+						displayName: constants.UNAVAILABLE_TARGET_PREFIX(managedInstance.name)
+					};
+				}
+				managedInstancesValues.push(managedInstanceValue);
+			}
+		});
+	}
+
+	if (managedInstancesValues.length === 0) {
+		managedInstancesValues = [
+			{
+				displayName: constants.NO_MANAGED_INSTANCE_FOUND,
+				name: ''
+			}
+		];
+	}
+	return managedInstancesValues;
+}
+
+export async function getAzureSqlDatabaseServers(account?: Account, subscription?: azureResource.AzureResourceSubscription): Promise<azure.AzureSqlDatabaseServer[]> {
+	let sqlDatabaseServers: azure.AzureSqlDatabaseServer[] = [];
+	try {
+		if (account && subscription) {
+			sqlDatabaseServers = await azure.getAvailableSqlDatabaseServers(account, subscription);
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getAzureSqlDatabaseServers', e);
+	}
+	sqlDatabaseServers.sort((a, b) => a.name.localeCompare(b.name));
+	return sqlDatabaseServers;
+}
+
+export async function getAzureSqlDatabases(account?: Account, subscription?: azureResource.AzureResourceSubscription, resourceGroupName?: string, serverName?: string): Promise<azure.AzureSqlDatabase[]> {
+	if (account && subscription && resourceGroupName && serverName) {
+		try {
+			const databases = await azure.getAvailableSqlDatabases(account, subscription, resourceGroupName, serverName);
+			return databases.sort((a, b) => a.name.localeCompare(b.name));
+		} catch (e) {
+			logError(TelemetryViews.Utils, 'utils.getAzureSqlDatabases', e);
+		}
+	}
+	return [];
+}
+
+export async function getVirtualMachines(account?: Account, subscription?: azureResource.AzureResourceSubscription): Promise<azure.SqlVMServer[]> {
+	let virtualMachines: azure.SqlVMServer[] = [];
+	try {
+		if (account && subscription) {
+			virtualMachines = (await azure.getAvailableSqlVMs(account, subscription)).filter((virtualMachine) => {
+				if (virtualMachine.properties.sqlImageOffer) {
+					return virtualMachine.properties.sqlImageOffer.toLowerCase().includes('-ws'); //filtering out all non windows sql vms.
+				}
+				return true; // Returning all VMs that don't have this property as we don't want to accidentally skip valid vms.
+			});
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getVirtualMachines', e);
+	}
+	virtualMachines.sort((a, b) => a.name.localeCompare(b.name));
+	return virtualMachines;
+}
+
+export async function getStorageAccounts(account?: Account, subscription?: azureResource.AzureResourceSubscription): Promise<azure.StorageAccount[]> {
+	let storageAccounts: azure.StorageAccount[] = [];
+	try {
+		if (account && subscription) {
+			storageAccounts = await azure.getAvailableStorageAccounts(account, subscription);
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getStorageAccounts', e);
+	}
+	storageAccounts.sort((a, b) => a.name.localeCompare(b.name));
+	return storageAccounts;
+}
+
+export async function getAzureSqlMigrationServices(account?: Account, subscription?: azureResource.AzureResourceSubscription): Promise<azure.SqlMigrationService[]> {
+	try {
+		if (account && subscription) {
+			const services = await azure.getSqlMigrationServices(account, subscription);
+			return services
+				.filter(dms => dms.properties.provisioningState === constants.ProvisioningState.Succeeded)
+				.sort((a, b) => a.name.localeCompare(b.name));
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getAzureSqlMigrationServices', e);
+	}
+	return [];
+}
+
+export async function getBlobContainer(account?: Account, subscription?: azureResource.AzureResourceSubscription, storageAccount?: azure.StorageAccount): Promise<azureResource.BlobContainer[]> {
+	let blobContainers: azureResource.BlobContainer[] = [];
+	try {
+		if (account && subscription && storageAccount) {
+			blobContainers = await azure.getBlobContainers(account, subscription, storageAccount);
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getBlobContainer', e);
+	}
+	blobContainers.sort((a, b) => a.name.localeCompare(b.name));
+	return blobContainers;
+}
+
+export async function getBlobLastBackupFileNames(account?: Account, subscription?: azureResource.AzureResourceSubscription, storageAccount?: azure.StorageAccount, blobContainer?: azureResource.BlobContainer): Promise<azureResource.Blob[]> {
+	let lastFileNames: azureResource.Blob[] = [];
+	try {
+		if (account && subscription && storageAccount && blobContainer) {
+			lastFileNames = await azure.getBlobs(account, subscription, storageAccount, blobContainer.name);
+		}
+	} catch (e) {
+		logError(TelemetryViews.Utils, 'utils.getBlobLastBackupFileNames', e);
+	}
+	lastFileNames.sort((a, b) => a.name.localeCompare(b.name));
+	return lastFileNames;
+}
+
+export function getAzureResourceDropdownValues(
+	azureResources: { location: string, id: string, name: string }[],
+	location: azureResource.AzureLocation | undefined,
+	resourceGroup: string | undefined,
+	resourceNotFoundMessage: string): CategoryValue[] {
+
+	if (location?.name && resourceGroup && azureResources?.length > 0) {
+		const locationName = location.name.toLowerCase();
+		const resourceGroupName = resourceGroup.toLowerCase();
+
+		return azureResources
+			.filter(resource =>
+				resource.location?.toLowerCase() === locationName &&
+				azure.getResourceGroupFromId(resource.id)?.toLowerCase() === resourceGroupName)
+			.map(resource => {
+				return { name: resource.id, displayName: resource.name };
+			});
+	}
+
+	return [{ name: '', displayName: resourceNotFoundMessage }];
+}
+
+export function getResourceDropdownValues(resources: { id: string, name: string }[], resourceNotFoundMessage: string): CategoryValue[] {
+	return resources?.map(resource => { return { name: resource.id, displayName: resource.name }; })
+		|| [{ name: '', displayName: resourceNotFoundMessage }];
+}
+
+export async function getAzureTenantsDropdownValues(tenants: Tenant[]): Promise<CategoryValue[]> {
+	return tenants?.map(tenant => { return { name: tenant.id, displayName: tenant.displayName }; })
+		|| [{ name: '', displayName: constants.ACCOUNT_SELECTION_PAGE_NO_LINKED_ACCOUNTS_ERROR }];
+}
+
+export async function getAzureLocationsDropdownValues(locations: azureResource.AzureLocation[]): Promise<CategoryValue[]> {
+	return locations?.map(location => { return { name: location.name, displayName: location.displayName }; })
+		|| [{ name: '', displayName: constants.NO_LOCATION_FOUND }];
+}
+
+export async function getBlobLastBackupFileNamesValues(blobs: azureResource.Blob[]): Promise<CategoryValue[]> {
+	return blobs?.map(blob => { return { name: blob.name, displayName: blob.name }; })
+		|| [{ name: '', displayName: constants.NO_BLOBFILES_FOUND }];
+}
+
+export async function updateControlDisplay(control: Component, visible: boolean, displayStyle: DisplayType = 'inline'): Promise<void> {
+	const display = visible ? displayStyle : 'none';
+	control.display = display;
+	await control.updateCssStyles({ 'display': display });
+	await control.updateProperties({ 'display': display });
+}
+
+export function generateGuid(): string {
+	const hexValues: string[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'];
+	// c.f. rfc4122 (UUID version 4 = xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx)
+	let oct: string = '';
+	let tmp: number;
+	/* tslint:disable:no-bitwise */
+	for (let a: number = 0; a < 4; a++) {
+		tmp = (4294967296 * Math.random()) | 0;
+		oct += hexValues[tmp & 0xF] +
+			hexValues[tmp >> 4 & 0xF] +
+			hexValues[tmp >> 8 & 0xF] +
+			hexValues[tmp >> 12 & 0xF] +
+			hexValues[tmp >> 16 & 0xF] +
+			hexValues[tmp >> 20 & 0xF] +
+			hexValues[tmp >> 24 & 0xF] +
+			hexValues[tmp >> 28 & 0xF];
+	}
+
+	// 'Set the two most significant bits (bits 6 and 7) of the clock_seq_hi_and_reserved to zero and one, respectively'
+	const clockSequenceHi: string = hexValues[8 + (Math.random() * 4) | 0];
+	return `${oct.substr(0, 8)}-${oct.substr(9, 4)}-4${oct.substr(13, 3)}-${clockSequenceHi}${oct.substr(16, 3)}-${oct.substr(19, 12)}`;
+	/* tslint:enable:no-bitwise */
+}
+
+export async function promptUserForFolder(): Promise<string> {
+	const options: vscode.OpenDialogOptions = {
+		defaultUri: vscode.Uri.file(getUserHome()!),
+		canSelectFiles: false,
+		canSelectFolders: true,
+		canSelectMany: false,
+	};
+
+	const fileUris = await vscode.window.showOpenDialog(options);
+	if (fileUris && fileUris.length > 0 && fileUris[0]) {
+		return fileUris[0].fsPath;
+	}
+
+	return '';
 }

@@ -31,6 +31,7 @@ import { HTMLMarkdownConverter } from 'sql/workbench/contrib/notebook/browser/ht
 import { highlightSelectedText } from 'sql/workbench/contrib/notebook/browser/utils';
 import { StandardKeyboardEvent } from 'vs/base/browser/keyboardEvent';
 import { KeyCode } from 'vs/base/common/keyCodes';
+import * as TelemetryKeys from 'sql/platform/telemetry/common/telemetryKeys';
 
 export const TEXT_SELECTOR: string = 'text-cell-component';
 const USER_SELECT_CLASS = 'actionselect';
@@ -63,12 +64,12 @@ export class TextCellComponent extends CellView implements OnInit, OnChanges {
 		if (DOM.getActiveElement() === this.output?.nativeElement && this.isActive() && this.cellModel?.currentMode === CellEditModes.WYSIWYG) {
 			const keyEvent = new StandardKeyboardEvent(e);
 			// Select all text
-			if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KEY_A) {
+			if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KeyA) {
 				preventDefaultAndExecCommand(e, 'selectAll');
-			} else if ((keyEvent.metaKey && keyEvent.shiftKey && keyEvent.keyCode === KeyCode.KEY_Z) || (keyEvent.ctrlKey && keyEvent.keyCode === KeyCode.KEY_Y) && !this.markdownMode) {
+			} else if ((keyEvent.metaKey && keyEvent.shiftKey && keyEvent.keyCode === KeyCode.KeyZ) || (keyEvent.ctrlKey && keyEvent.keyCode === KeyCode.KeyY) && !this.markdownMode) {
 				// Redo text
 				this.redoRichTextChange();
-			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KEY_Z) {
+			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KeyZ) {
 				// Undo text
 				this.undoRichTextChange();
 			} else if (keyEvent.shiftKey && keyEvent.keyCode === KeyCode.Tab) {
@@ -77,22 +78,27 @@ export class TextCellComponent extends CellView implements OnInit, OnChanges {
 			} else if (keyEvent.keyCode === KeyCode.Tab) {
 				// Indent text
 				preventDefaultAndExecCommand(e, 'indent');
-			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KEY_B) {
+			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KeyB) {
 				// Bold text
 				preventDefaultAndExecCommand(e, 'bold');
-			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KEY_I) {
+				this.cellModel.notebookModel.sendNotebookTelemetryActionEvent(TelemetryKeys.NbTelemetryAction.WYSIWYGKeyboardAction, { transformAction: 'BOLD' });
+			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KeyI) {
 				// Italicize text
 				preventDefaultAndExecCommand(e, 'italic');
-			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KEY_U) {
+				this.cellModel.notebookModel.sendNotebookTelemetryActionEvent(TelemetryKeys.NbTelemetryAction.WYSIWYGKeyboardAction, { transformAction: 'ITALIC' });
+			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.keyCode === KeyCode.KeyU) {
 				// Underline text
 				preventDefaultAndExecCommand(e, 'underline');
-			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.shiftKey && keyEvent.keyCode === KeyCode.KEY_K) {
+				this.cellModel.notebookModel.sendNotebookTelemetryActionEvent(TelemetryKeys.NbTelemetryAction.WYSIWYGKeyboardAction, { transformAction: 'UNDERLINE' });
+			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.shiftKey && keyEvent.keyCode === KeyCode.KeyK) {
 				// Code Block
 				preventDefaultAndExecCommand(e, 'formatBlock', false, 'pre');
-			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.shiftKey && keyEvent.keyCode === KeyCode.KEY_H) {
+				this.cellModel.notebookModel.sendNotebookTelemetryActionEvent(TelemetryKeys.NbTelemetryAction.WYSIWYGKeyboardAction, { transformAction: 'CODE' });
+			} else if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.shiftKey && keyEvent.keyCode === KeyCode.KeyH) {
 				// Highlight Text
 				DOM.EventHelper.stop(e, true);
 				highlightSelectedText();
+				this.cellModel.notebookModel.sendNotebookTelemetryActionEvent(TelemetryKeys.NbTelemetryAction.WYSIWYGKeyboardAction, { transformAction: 'HIGHLIGHT' });
 			}
 		}
 	}
@@ -110,7 +116,6 @@ export class TextCellComponent extends CellView implements OnInit, OnChanges {
 	private _htmlMarkdownConverter: HTMLMarkdownConverter;
 	private markdownPreviewLineHeight: number;
 	public readonly onDidClickLink = this._onDidClickLink.event;
-	public previewFeaturesEnabled: boolean = false;
 	public doubleClickEditEnabled: boolean;
 	private _editorHeight: number;
 	private readonly _markdownMaxHeight = 4000;
@@ -139,7 +144,6 @@ export class TextCellComponent extends CellView implements OnInit, OnChanges {
 			}
 		}));
 		this._register(this._configurationService.onDidChangeConfiguration(e => {
-			this.previewFeaturesEnabled = this._configurationService.getValue('workbench.enablePreviewFeatures');
 			this.doubleClickEditEnabled = this._configurationService.getValue('notebook.enableDoubleClickEdit');
 			if (e.affectsConfiguration('notebook.markdownPreviewLineHeight')) {
 				this.markdownPreviewLineHeight = this._configurationService.getValue('notebook.markdownPreviewLineHeight');
@@ -188,11 +192,9 @@ export class TextCellComponent extends CellView implements OnInit, OnChanges {
 
 	ngOnInit() {
 		this._editorHeight = document.querySelector('.editor-container').clientHeight;
-		this.previewFeaturesEnabled = this._configurationService.getValue('workbench.enablePreviewFeatures');
 		this._register(this.themeService.onDidColorThemeChange(this.updateTheme, this));
 		this.updateTheme(this.themeService.getColorTheme());
 		this.setFocusAndScroll();
-		this.cellModel.isEditMode = false;
 		this._htmlMarkdownConverter = this._instantiationService.createInstance(HTMLMarkdownConverter, this.notebookUri);
 		this._register(this.cellModel.onOutputsChanged(e => {
 			this.updatePreview();
@@ -434,6 +436,7 @@ export class TextCellComponent extends CellView implements OnInit, OnChanges {
 			this.cellModel.showMarkdown = false;
 		} else {
 			this.markdownMode = this.cellModel.showMarkdown;
+			this.previewMode = this.cellModel.showPreview;
 		}
 		this.updatePreview();
 		this._changeRef.detectChanges();

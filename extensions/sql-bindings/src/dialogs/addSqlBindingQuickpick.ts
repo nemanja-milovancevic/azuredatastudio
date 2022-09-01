@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import * as uuid from 'uuid';
 import * as constants from '../common/constants';
 import * as utils from '../common/utils';
+import * as path from 'path';
 import * as azureFunctionsUtils from '../common/azureFunctionsUtils';
 import { TelemetryActions, TelemetryReporter, TelemetryViews } from '../common/telemetry';
 import { addSqlBinding, getAzureFunctions } from '../services/azureFunctionsService';
@@ -44,7 +45,7 @@ export async function launchAddSqlBindingQuickpick(uri: vscode.Uri | undefined):
 	}
 
 	// get all the Azure functions in the file
-	const azureFunctions = getAzureFunctionsResult.azureFunctions;
+	const azureFunctions = getAzureFunctionsResult.azureFunctions.map(af => typeof (af) === 'string' ? af : af.name);
 
 	if (azureFunctions.length === 0) {
 		void vscode.window.showErrorMessage(constants.noAzureFunctionsInFile);
@@ -77,17 +78,7 @@ export async function launchAddSqlBindingQuickpick(uri: vscode.Uri | undefined):
 		TelemetryReporter.createActionEvent(TelemetryViews.SqlBindingsQuickPick, TelemetryActions.getBindingType)
 			.withAdditionalProperties(propertyBag).send();
 
-		// 3. ask for object name for the binding
-		quickPickStep = 'getObjectName';
-		const objectName = await azureFunctionsUtils.promptForObjectName(selectedBinding);
-
-		if (!objectName) {
-			return;
-		}
-		TelemetryReporter.createActionEvent(TelemetryViews.SqlBindingsQuickPick, TelemetryActions.getObjectName)
-			.withAdditionalProperties(propertyBag).send();
-
-		// 4. ask for connection string setting name
+		// 3. ask for connection string setting name
 		let projectUri: vscode.Uri | undefined;
 		try {
 			projectUri = await azureFunctionsUtils.getAFProjectContainingFile(uri);
@@ -96,17 +87,26 @@ export async function launchAddSqlBindingQuickpick(uri: vscode.Uri | undefined):
 		}
 
 		quickPickStep = 'updateConnectionString';
-		let connectionStringSettingName = await azureFunctionsUtils.promptAndUpdateConnectionStringSetting(projectUri);
-		if (!connectionStringSettingName) {
+		let connectionStringInfo = await azureFunctionsUtils.promptAndUpdateConnectionStringSetting(projectUri);
+		if (!connectionStringInfo) {
 			return;
 		}
 		TelemetryReporter.createActionEvent(TelemetryViews.SqlBindingsQuickPick, TelemetryActions.updateConnectionString)
 			.withAdditionalProperties(propertyBag).send();
 
+		// 4. ask for object name for the binding
+		quickPickStep = 'getObjectName';
+		const objectName = await azureFunctionsUtils.promptForObjectName(selectedBinding, connectionStringInfo.connectionInfo);
+		if (!objectName) {
+			return;
+		}
+		TelemetryReporter.createActionEvent(TelemetryViews.SqlBindingsQuickPick, TelemetryActions.getObjectName)
+			.withAdditionalProperties(propertyBag).send();
+
 		// 5. insert binding
 		try {
 			quickPickStep = 'insertBinding';
-			const result = await addSqlBinding(selectedBinding, uri.fsPath, azureFunctionName, objectName, connectionStringSettingName);
+			const result = await addSqlBinding(selectedBinding, uri.fsPath, azureFunctionName, objectName, connectionStringInfo.connectionStringSettingName!);
 
 			if (!result.success) {
 				void vscode.window.showErrorMessage(result.errorMessage);
@@ -114,6 +114,13 @@ export async function launchAddSqlBindingQuickpick(uri: vscode.Uri | undefined):
 					.withAdditionalProperties(propertyBag).send();
 				return;
 			}
+
+			// Add latest sql extension package reference to project
+			// only add if AF project (.csproj) is found
+			if (projectUri?.fsPath) {
+				await azureFunctionsUtils.addSqlNugetReferenceToProjectFile(path.dirname(projectUri.fsPath));
+			}
+
 			exitReason = 'done';
 			TelemetryReporter.createActionEvent(TelemetryViews.SqlBindingsQuickPick, TelemetryActions.finishAddSqlBinding)
 				.withAdditionalProperties(propertyBag).send();

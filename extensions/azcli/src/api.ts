@@ -5,9 +5,7 @@
 
 import * as azExt from 'az-ext';
 import { IAzTool } from './az';
-import Logger from './common/logger';
 import { NoAzureCLIError } from './common/utils';
-import * as loc from './localizedConstants';
 import { AzToolService } from './services/azToolService';
 
 /**
@@ -21,7 +19,6 @@ export function validateAz(az: IAzTool | undefined) {
 
 export function throwIfNoAz(localAz: IAzTool | undefined): asserts localAz {
 	if (!localAz) {
-		Logger.log(loc.noAzureCLI);
 		throw new NoAzureCLIError();
 	}
 }
@@ -65,73 +62,30 @@ export function getAzApi(localAzDiscovered: Promise<IAzTool | undefined>, azTool
 					name: string,
 					resourceGroup?: string,
 					namespace?: string,
-					usek8s?: boolean,
 					additionalEnvVars?: azExt.AdditionalEnvVars
 				) => {
 					await localAzDiscovered;
 					validateAz(azToolService.localAz);
-					return azToolService.localAz!.arcdata.dc.upgrade(desiredVersion, name, resourceGroup, namespace, usek8s, additionalEnvVars);
+					return azToolService.localAz!.arcdata.dc.upgrade(desiredVersion, name, resourceGroup, namespace, additionalEnvVars);
 				}
 			}
 		},
 		postgres: {
-			arcserver: {
+			serverarc: {
 				delete: async (name: string, namespace: string, additionalEnvVars?: azExt.AdditionalEnvVars) => {
 					await localAzDiscovered;
 					validateAz(azToolService.localAz);
-					return azToolService.localAz!.postgres.arcserver.delete(name, namespace, additionalEnvVars);
+					return azToolService.localAz!.postgres.serverarc.delete(name, namespace, additionalEnvVars);
 				},
 				list: async (namespace: string, additionalEnvVars?: azExt.AdditionalEnvVars) => {
 					await localAzDiscovered;
 					validateAz(azToolService.localAz);
-					return azToolService.localAz!.postgres.arcserver.list(namespace, additionalEnvVars);
+					return azToolService.localAz!.postgres.serverarc.list(namespace, additionalEnvVars);
 				},
 				show: async (name: string, namespace: string, additionalEnvVars?: azExt.AdditionalEnvVars) => {
 					await localAzDiscovered;
 					validateAz(azToolService.localAz);
-					return azToolService.localAz!.postgres.arcserver.show(name, namespace, additionalEnvVars);
-				},
-				edit: async (
-					name: string,
-					args: {
-						adminPassword?: boolean;
-						coresLimit?: string;
-						coresRequest?: string;
-						coordinatorEngineSettings?: string;
-						engineSettings?: string;
-						extensions?: string;
-						memoryLimit?: string;
-						memoryRequest?: string;
-						noWait?: boolean;
-						port?: number;
-						replaceEngineSettings?: boolean;
-						workerEngineSettings?: string;
-						workers?: number;
-					},
-					namespace: string,
-					additionalEnvVars?: azExt.AdditionalEnvVars) => {
-					await localAzDiscovered;
-					validateAz(azToolService.localAz);
-					return azToolService.localAz!.postgres.arcserver.edit(name, args, namespace, additionalEnvVars);
-				}
-			}
-		},
-		sql: {
-			miarc: {
-				delete: async (name: string, namespace: string, additionalEnvVars?: azExt.AdditionalEnvVars) => {
-					await localAzDiscovered;
-					validateAz(azToolService.localAz);
-					return azToolService.localAz!.sql.miarc.delete(name, namespace, additionalEnvVars);
-				},
-				list: async (namespace: string, additionalEnvVars?: azExt.AdditionalEnvVars) => {
-					await localAzDiscovered;
-					validateAz(azToolService.localAz);
-					return azToolService.localAz!.sql.miarc.list(namespace, additionalEnvVars);
-				},
-				show: async (name: string, namespace: string, additionalEnvVars?: azExt.AdditionalEnvVars) => {
-					await localAzDiscovered;
-					validateAz(azToolService.localAz);
-					return azToolService.localAz!.sql.miarc.show(name, namespace, additionalEnvVars);
+					return azToolService.localAz!.postgres.serverarc.show(name, namespace, additionalEnvVars);
 				},
 				update: async (
 					name: string,
@@ -141,10 +95,73 @@ export function getAzApi(localAzDiscovered: Promise<IAzTool | undefined>, azTool
 						memoryLimit?: string;
 						memoryRequest?: string;
 						noWait?: boolean;
+						port?: number;
 					},
-					// Direct mode arguments
+					namespace: string,
+					additionalEnvVars?: azExt.AdditionalEnvVars) => {
+					await localAzDiscovered;
+					validateAz(azToolService.localAz);
+					return azToolService.localAz!.postgres.serverarc.update(name, args, namespace, additionalEnvVars);
+				}
+			}
+		},
+		sql: {
+			miarc: {
+				delete: async (
+					name: string,
+					args: {
+						// ARM API arguments
+						resourceGroup?: string;
+						// K8s API arguments
+						namespace?: string;
+					},
+					additionalEnvVars?: azExt.AdditionalEnvVars
+				) => {
+					await localAzDiscovered;
+					validateAz(azToolService.localAz);
+					return azToolService.localAz!.sql.miarc.delete(name, args, additionalEnvVars);
+				},
+				list: async (
+					args: {
+						// ARM API arguments
+						resourceGroup?: string;
+						// K8s API arguments
+						namespace?: string;
+					},
+					additionalEnvVars?: azExt.AdditionalEnvVars
+				) => {
+					await localAzDiscovered;
+					validateAz(azToolService.localAz);
+					return azToolService.localAz!.sql.miarc.list(args, additionalEnvVars);
+				},
+				show: async (
+					name: string,
+					args: {
+						// ARM API arguments
+						resourceGroup?: string;
+						// K8s API arguments
+						namespace?: string;
+					},
+					// Additional arguments
+					additionalEnvVars?: azExt.AdditionalEnvVars
+				) => {
+					await localAzDiscovered;
+					validateAz(azToolService.localAz);
+					return azToolService.localAz!.sql.miarc.show(name, args, additionalEnvVars);
+				},
+				update: async (
+					name: string,
+					args: {
+						coresLimit?: string;
+						coresRequest?: string;
+						memoryLimit?: string;
+						memoryRequest?: string;
+						noWait?: boolean;
+						syncSecondaryToCommit?: string;
+					},
+					// ARM API arguments
 					resourceGroup?: string,
-					// Indirect mode arguments
+					// K8s API arguments
 					namespace?: string,
 					usek8s?: boolean,
 					// Additional arguments
@@ -155,21 +172,19 @@ export function getAzApi(localAzDiscovered: Promise<IAzTool | undefined>, azTool
 					return azToolService.localAz!.sql.miarc.update(name, args, resourceGroup, namespace, usek8s, additionalEnvVars);
 				},
 				upgrade: async (
-					desiredVersion: string,
 					name: string,
 					args: {
-						// Direct mode arguments
+						// ARM API arguments
 						resourceGroup?: string;
-						// Indirect mode arguments
+						// K8s API arguments
 						namespace?: string;
-						usek8s?: boolean;
 					},
 					// Additional arguments
 					additionalEnvVars?: azExt.AdditionalEnvVars
 				) => {
 					await localAzDiscovered;
 					validateAz(azToolService.localAz);
-					return azToolService.localAz!.sql.miarc.upgrade(desiredVersion, name, args, additionalEnvVars);
+					return azToolService.localAz!.sql.miarc.upgrade(name, args, additionalEnvVars);
 				}
 			},
 			midbarc: {
