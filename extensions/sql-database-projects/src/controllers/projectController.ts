@@ -238,7 +238,12 @@ export class ProjectsController {
 
 		// get dlls and targets file needed for building for legacy style projects
 		if (!project.isSdkStyleProject) {
-			await this.buildHelper.createBuildDirFolder(this._outputChannel);
+			const result = await this.buildHelper.createBuildDirFolder(this._outputChannel);
+
+			if (!result) {
+				void vscode.window.showErrorMessage(constants.errorRetrievingBuildFiles);
+				return '';
+			}
 		}
 
 		const options: ShellCommandOptions = {
@@ -1399,7 +1404,7 @@ export class ProjectsController {
 		if (utils.getAzdataApi()) {
 			let createProjectFromDatabaseDialog = this.getCreateProjectFromDatabaseDialog(profile as azdataType.IConnectionProfile);
 
-			createProjectFromDatabaseDialog.createProjectFromDatabaseCallback = async (model) => await this.createProjectFromDatabaseCallback(model);
+			createProjectFromDatabaseDialog.createProjectFromDatabaseCallback = async (model, connectionId) => await this.createProjectFromDatabaseCallback(model, connectionId);
 
 			await createProjectFromDatabaseDialog.openDialog();
 
@@ -1415,7 +1420,7 @@ export class ProjectsController {
 			}
 			const model = await createNewProjectFromDatabaseWithQuickpick(profile as mssqlVscode.IConnectionInfo);
 			if (model) {
-				await this.createProjectFromDatabaseCallback(model);
+				await this.createProjectFromDatabaseCallback(model, profile as mssqlVscode.IConnectionInfo);
 			}
 			return undefined;
 		}
@@ -1426,16 +1431,30 @@ export class ProjectsController {
 		return new CreateProjectFromDatabaseDialog(profile);
 	}
 
-	public async createProjectFromDatabaseCallback(model: ImportDataModel) {
+	public async createProjectFromDatabaseCallback(model: ImportDataModel, connectionInfo?: string | mssqlVscode.IConnectionInfo) {
 		try {
 
 			const newProjFolderUri = model.filePath;
+			let targetPlatform: SqlTargetPlatform | undefined;
+			let serverInfo;
+			if (connectionInfo) {
+				if (typeof connectionInfo === 'string') {
+					serverInfo = await utils.getAzdataApi()!.connection.getServerInfo(connectionInfo);
+				} else {
+					serverInfo = (await utils.getVscodeMssqlApi()).getServerInfo(connectionInfo);
+				}
+			}
+
+			if (serverInfo) {
+				targetPlatform = await utils.getTargetPlatformFromServerVersion(serverInfo);
+			}
 
 			const newProjFilePath = await this.createNewProject({
 				newProjName: model.projName,
 				folderUri: vscode.Uri.file(newProjFolderUri),
 				projectTypeId: model.sdkStyle ? constants.emptySqlDatabaseSdkProjectTypeId : constants.emptySqlDatabaseProjectTypeId,
-				sdkStyle: model.sdkStyle
+				sdkStyle: model.sdkStyle,
+				targetPlatform: targetPlatform
 			});
 
 			model.filePath = path.dirname(newProjFilePath);
