@@ -4,17 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as azdata from 'azdata';
-import { extHostNamedCustomer } from 'vs/workbench/api/common/extHostCustomers';
 import { Disposable, DisposableStore } from 'vs/base/common/lifecycle';
 import { URI, UriComponents } from 'vs/base/common/uri';
 import { Event, Emitter } from 'vs/base/common/event';
-import { IExtHostContext, IUndoStopOptions } from 'vs/workbench/api/common/extHost.protocol';
+import { IUndoStopOptions } from 'vs/workbench/api/common/extHost.protocol';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { Schemas } from 'vs/base/common/network';
 import * as types from 'vs/base/common/types';
 import {
-	SqlMainContext, MainThreadNotebookDocumentsAndEditorsShape, SqlExtHostContext, ExtHostNotebookDocumentsAndEditorsShape,
+	MainThreadNotebookDocumentsAndEditorsShape, ExtHostNotebookDocumentsAndEditorsShape,
 	INotebookDocumentsAndEditorsDelta, INotebookEditorAddData, INotebookShowOptions, INotebookModelAddedData, INotebookModelChangedData
 } from 'sql/workbench/api/common/sqlExtHost.protocol';
 import { NotebookInput } from 'sql/workbench/contrib/notebook/browser/models/notebookInput';
@@ -26,6 +25,8 @@ import { NotebookChangeType, CellTypes } from 'sql/workbench/services/notebook/c
 import { localize } from 'vs/nls';
 import { IFileService } from 'vs/platform/files/common/files';
 import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
+import { extHostNamedCustomer, IExtHostContext } from 'vs/workbench/services/extensions/common/extHostCustomers';
+import { SqlExtHostContext, SqlMainContext } from 'vs/workbench/api/common/extHost.protocol';
 import { NotebookEditor } from 'sql/workbench/contrib/notebook/browser/notebookEditor';
 
 class MainThreadNotebookEditor extends Disposable {
@@ -320,7 +321,7 @@ export class MainThreadNotebookDocumentsAndEditors extends Disposable implements
 		@IInstantiationService private _instantiationService: IInstantiationService,
 		@INotebookService private readonly _notebookService: INotebookService,
 		@IFileService private readonly _fileService: IFileService,
-		@ITextFileService private readonly _textFileService: ITextFileService
+		@ITextFileService private readonly _textFileService: ITextFileService,
 	) {
 		super();
 		if (extHostContext) {
@@ -340,11 +341,6 @@ export class MainThreadNotebookDocumentsAndEditors extends Disposable implements
 		} else {
 			return Promise.resolve(false);
 		}
-	}
-
-	async $tryCreateNotebookDocument(providerId: string, contents?: azdata.nb.INotebookContents): Promise<UriComponents> {
-		let input = await this._notebookService.createNotebookInputFromContents(providerId, contents);
-		return input.resource;
 	}
 
 	$tryShowNotebookDocument(resource: UriComponents, options: INotebookShowOptions): Promise<string> {

@@ -4,11 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
-import { extHostNamedCustomer } from 'vs/workbench/api/common/extHostCustomers';
-import { IExtHostContext } from 'vs/workbench/api/common/extHost.protocol';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 
-import { MainThreadModelViewDialogShape, SqlMainContext, ExtHostModelViewDialogShape, SqlExtHostContext } from 'sql/workbench/api/common/sqlExtHost.protocol';
+import { MainThreadModelViewDialogShape, ExtHostModelViewDialogShape } from 'sql/workbench/api/common/sqlExtHost.protocol';
 import { Dialog, DialogTab, DialogButton, WizardPage, Wizard } from 'sql/workbench/services/dialog/common/dialogTypes';
 import { CustomDialogService, DefaultWizardOptions, DefaultDialogOptions } from 'sql/workbench/services/dialog/browser/customDialogService';
 import { IModelViewDialogDetails, IModelViewTabDetails, IModelViewButtonDetails, IModelViewWizardPageDetails, IModelViewWizardDetails } from 'sql/workbench/api/common/sqlExtHostTypes';
@@ -21,6 +19,8 @@ import { IAdsTelemetryService } from 'sql/platform/telemetry/common/telemetry';
 import { IEditorPane } from 'vs/workbench/common/editor';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { EditorInput } from 'vs/workbench/common/editor/editorInput';
+import { extHostNamedCustomer, IExtHostContext } from 'vs/workbench/services/extensions/common/extHostCustomers';
+import { SqlExtHostContext, SqlMainContext } from 'vs/workbench/api/common/extHost.protocol';
 
 @extHostNamedCustomer(SqlMainContext.MainThreadModelViewDialog)
 export class MainThreadModelViewDialog extends Disposable implements MainThreadModelViewDialogShape {
@@ -144,6 +144,9 @@ export class MainThreadModelViewDialog extends Disposable implements MainThreadM
 			dialog.customButtons = details.customButtons.map(buttonHandle => this.getButton(buttonHandle));
 		}
 		dialog.message = details.message;
+		dialog.loading = details.loading;
+		dialog.loadingText = dialog.loadingText;
+		dialog.loadingCompletedText = dialog.loadingCompletedText;
 
 		return Promise.resolve();
 	}
@@ -223,7 +226,9 @@ export class MainThreadModelViewDialog extends Disposable implements MainThreadM
 			wizard.customButtons = details.customButtons.map(buttonHandle => this.getButton(buttonHandle));
 		}
 		wizard.message = details.message;
-
+		wizard.loading = details.loading;
+		wizard.loadingText = details.loadingText;
+		wizard.loadingCompletedText = details.loadingCompletedText;
 		return Promise.resolve();
 	}
 

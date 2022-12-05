@@ -3,12 +3,12 @@
  *  Licensed under the Source EULA. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExtensionNodeType, TreeItem } from 'azdata';
+import { ExtensionNodeType, TreeItem, connection } from 'azdata';
 import { TreeItemCollapsibleState, ExtensionContext } from 'vscode';
 import * as nls from 'vscode-nls';
 const localize = nls.loadMessageBundle();
 
-import { AzureResourceItemType } from '../../constants';
+import { AzureResourceItemType, mssqlProvider } from '../../constants';
 import { generateGuid } from '../../utils';
 import { IAzureResourceService } from '../../interfaces';
 import { ResourceTreeDataProviderBase } from '../resourceTreeDataProviderBase';
@@ -43,11 +43,11 @@ export class SqlInstanceTreeDataProvider extends ResourceTreeDataProviderBase<az
 				databaseName: databaseServer.defaultDatabaseName,
 				userName: databaseServer.loginName,
 				password: '',
-				authenticationType: 'SqlLogin',
+				authenticationType: connection.AuthenticationType.SqlLogin,
 				savePassword: true,
 				groupFullName: '',
 				groupId: '',
-				providerName: 'MSSQL',
+				providerName: mssqlProvider,
 				saveProfile: false,
 				options: {},
 				azureAccount: account.key.accountId,
@@ -55,7 +55,7 @@ export class SqlInstanceTreeDataProvider extends ResourceTreeDataProviderBase<az
 				azureResourceId: databaseServer.id,
 				azurePortalEndpoint: account.properties.providerSettings.settings.portalEndpoint
 			},
-			childProvider: 'MSSQL',
+			childProvider: mssqlProvider,
 			type: ExtensionNodeType.Server
 		};
 	}

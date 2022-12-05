@@ -176,7 +176,7 @@ export interface IConnectionManagementService {
 
 	isConnected(fileUri: string): boolean;
 
-	refreshAzureAccountTokenIfNecessary(uri: string): Promise<boolean>;
+	refreshAzureAccountTokenIfNecessary(uriOrConnectionProfile: string | ConnectionProfile): Promise<boolean>;
 	/**
 	 * Returns true if the connection profile is connected
 	 */
@@ -324,10 +324,10 @@ export interface IConnectionManagementService {
 
 	/**
 	 * Handle the unsupported provider scenario.
-	 * @param providerName The provider name.
+	 * @param providerId The provider ID
 	 * @returns Promise with a boolean value indicating whether the user has accepted the suggestion.
 	 */
-	handleUnsupportedProvider(providerName: string): Promise<boolean>;
+	handleUnsupportedProvider(providerId: string): Promise<boolean>;
 }
 
 export enum RunQueryOnConnectionMode {

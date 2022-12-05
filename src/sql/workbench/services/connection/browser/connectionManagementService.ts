@@ -27,7 +27,6 @@ import { AzureResource, ConnectionOptionSpecialType } from 'sql/workbench/api/co
 import { IAccountManagementService } from 'sql/platform/accounts/common/interfaces';
 
 import * as azdata from 'azdata';
-
 import * as nls from 'vs/nls';
 import * as errors from 'vs/base/common/errors';
 import { Disposable } from 'vs/base/common/lifecycle';
@@ -498,17 +497,13 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 				// a connection management info. See https://github.com/microsoft/azuredatastudio/issues/16556
 				this.tryAddActiveConnection(connectionMgmtInfo, connection, options.saveTheConnection);
 
-
-
 				if (callbacks.onConnectSuccess) {
 					callbacks.onConnectSuccess(options.params, connectionResult.connectionProfile);
 				}
 				if (options.saveTheConnection || isEdit) {
 					let matcher: interfaces.ProfileMatcher;
 					if (isEdit) {
-						matcher = (a: interfaces.IConnectionProfile, b: interfaces.IConnectionProfile) => {
-							return a.id === b.id;
-						};
+						matcher = (a: interfaces.IConnectionProfile, b: interfaces.IConnectionProfile) => a.id === options.params.oldProfileId;
 					}
 
 					await this.saveToSettings(uri, connection, matcher).then(value => {
@@ -865,9 +860,9 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 	 * @param connection The connection to fill in or update
 	 */
 	private async fillInOrClearToken(connection: interfaces.IConnectionProfile): Promise<boolean> {
-		if (connection.authenticationType !== Constants.azureMFA
-			&& connection.authenticationType !== Constants.azureMFAAndUser
-			&& connection.authenticationType !== Constants.dstsAuth) {
+		if (connection.authenticationType !== Constants.AuthenticationType.AzureMFA
+			&& connection.authenticationType !== Constants.AuthenticationType.AzureMFAAndUser
+			&& connection.authenticationType !== Constants.AuthenticationType.DSTSAuth) {
 			connection.options['azureAccountToken'] = undefined;
 			return true;
 		}
@@ -875,7 +870,7 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 		let azureResource = this.getAzureResourceForConnection(connection);
 		const accounts = await this._accountManagementService.getAccounts();
 
-		if (connection.authenticationType === Constants.dstsAuth) {
+		if (connection.authenticationType === Constants.AuthenticationType.DSTSAuth) {
 			let dstsAccounts = accounts.filter(a => a.key.providerId.startsWith('dstsAuth'));
 			if (dstsAccounts.length <= 0) {
 				connection.options['azureAccountToken'] = undefined;
@@ -894,7 +889,7 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 
 		const azureAccounts = accounts.filter(a => a.key.providerId.startsWith('azure'));
 		if (azureAccounts && azureAccounts.length > 0) {
-			let accountId = (connection.authenticationType === Constants.azureMFA || connection.authenticationType === Constants.azureMFAAndUser) ? connection.azureAccount : connection.userName;
+			let accountId = (connection.authenticationType === Constants.AuthenticationType.AzureMFA || connection.authenticationType === Constants.AuthenticationType.AzureMFAAndUser) ? connection.azureAccount : connection.userName;
 			let account = azureAccounts.find(account => account.key.accountId === accountId);
 			if (account) {
 				this._logService.debug(`Getting security token for Azure account ${account.key.accountId}`);
@@ -910,14 +905,15 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 				}
 				const tenantId = connection.azureTenantId;
 				const token = await this._accountManagementService.getAccountSecurityToken(account, tenantId, azureResource);
-				this._logService.debug(`Got token for tenant ${token}`);
 				if (!token) {
-					this._logService.info(`No security tokens found for account`);
+					this._logService.warn(`No security tokens found for account`);
+				} else {
+					this._logService.debug(`Got access token for tenant ${tenantId} that expires in ${(token.expiresOn - new Date().getTime()) / 1000} seconds`);
+					connection.options['azureAccountToken'] = token.token;
+					connection.options['expiresOn'] = token.expiresOn;
+					connection.options['password'] = '';
+					return true;
 				}
-				connection.options['azureAccountToken'] = token.token;
-				connection.options['expiresOn'] = token.expiresOn;
-				connection.options['password'] = '';
-				return true;
 			} else {
 				this._logService.info(`Could not find Azure account with name ${accountId}`);
 			}
@@ -929,58 +925,82 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 
 	/**
 	 * Refresh Azure access token if it's expired.
-	 * @param uri connection uri
-	 * @returns true if no need to refresh or successfully refreshed token
+	 * @param uriOrConnectionProfile connection uri or connection profile
+	 * @returns true if no need to refresh or successfully refreshed token, false if refresh fails or auth mode is not AzureMFA
 	 */
-	public async refreshAzureAccountTokenIfNecessary(uri: string): Promise<boolean> {
-		const profile = this._connectionStatusManager.getConnectionProfile(uri);
-		if (!profile) {
-			this._logService.warn(`Connection not found for uri ${uri}`);
+	public async refreshAzureAccountTokenIfNecessary(uriOrConnectionProfile: string | ConnectionProfile): Promise<boolean> {
+		if (!uriOrConnectionProfile) {
+			this._logService.warn(`refreshAzureAccountTokenIfNecessary: Neither Connection uri nor connection profile received.`);
 			return false;
 		}
 
-		//wait for the pending reconnction promise if any
+		let uri: string;
+		let connectionProfile: ConnectionProfile;
+
+		if (typeof uriOrConnectionProfile === 'string') {
+			uri = uriOrConnectionProfile;
+			connectionProfile = this._connectionStatusManager.getConnectionProfile(uri);
+			if (!connectionProfile) {
+				this._logService.warn(`Connection not found for uri ${uri} when refreshing token`);
+				return false;
+			}
+		} else {
+			connectionProfile = uriOrConnectionProfile;
+			uri = this.getConnectionUri(connectionProfile);
+		}
+
+		// Wait for the pending reconnction promise if any
+		// We expect uri to be defined
 		const previousReconnectPromise = this._uriToReconnectPromiseMap[uri];
 		if (previousReconnectPromise) {
-			this._logService.info(`Found pending reconnect promise for uri ${uri}, waiting.`);
+			this._logService.debug(`Found pending reconnect promise for uri ${uri}, waiting.`);
 			try {
 				const previousConnectionResult = await previousReconnectPromise;
 				if (previousConnectionResult && previousConnectionResult.connected) {
-					this._logService.info(`Previous pending reconnection for uri ${uri} succeeded.`);
+					this._logService.debug(`Previous pending reconnection for uri ${uri} succeeded.`);
 					return true;
 				}
-				this._logService.info(`Previous pending reconnection for uri ${uri} failed.`);
+				this._logService.debug(`Previous pending reconnection for uri ${uri} failed.`);
 			} catch (err) {
-				this._logService.info(`Previous pending reconnect promise for uri ${uri} is rejected with error ${err}, will attempt to reconnect if necessary.`);
+				this._logService.debug(`Previous pending reconnect promise for uri ${uri} is rejected with error ${err}, will attempt to reconnect if necessary.`);
 			}
 		}
 
-		const expiry = profile.options.expiresOn;
-		if (typeof expiry === 'number' && !Number.isNaN(expiry)) {
-			const currentTime = new Date().getTime() / 1000;
-			const maxTolerance = 2 * 60; // two minutes
-			if (expiry - currentTime < maxTolerance) {
-				this._logService.info(`Access token expired for connection ${profile.id} with uri ${uri}`);
-				try {
-					const connectionResultPromise = this.connect(profile, uri);
-					this._uriToReconnectPromiseMap[uri] = connectionResultPromise;
-					const connectionResult = await connectionResultPromise;
-					if (!connectionResult) {
-						this._logService.error(`Failed to refresh connection ${profile.id} with uri ${uri}, invalid connection result.`);
-						throw new Error(nls.localize('connection.invalidConnectionResult', "Connection result is invalid"));
-					} else if (!connectionResult.connected) {
-						this._logService.error(`Failed to refresh connection ${profile.id} with uri ${uri}, error code: ${connectionResult.errorCode}, error message: ${connectionResult.errorMessage}`);
-						throw new Error(nls.localize('connection.refreshAzureTokenFailure', "Failed to refresh Azure account token for connection"));
+		// We expect connectionProfile to be defined
+		if (connectionProfile && connectionProfile.authenticationType === Constants.AuthenticationType.AzureMFA) {
+			const expiry = connectionProfile.options.expiresOn;
+			if (typeof expiry === 'number' && !Number.isNaN(expiry)) {
+				const currentTime = new Date().getTime() / 1000;
+				const maxTolerance = 2 * 60; // two minutes
+				if (expiry - currentTime < maxTolerance) {
+					this._logService.debug(`Access token expired for connection ${connectionProfile.id} with uri ${uri}`);
+					try {
+						const connectionResultPromise = this.connect(connectionProfile, uri);
+						this._uriToReconnectPromiseMap[uri] = connectionResultPromise;
+						const connectionResult = await connectionResultPromise;
+						if (!connectionResult) {
+							this._logService.error(`Failed to refresh connection ${connectionProfile.id} with uri ${uri}, invalid connection result.`);
+							throw new Error(nls.localize('connection.invalidConnectionResult', "Connection result is invalid"));
+						} else if (!connectionResult.connected) {
+							this._logService.error(`Failed to refresh connection ${connectionProfile.id} with uri ${uri}, error code: ${connectionResult.errorCode}, error message: ${connectionResult.errorMessage}`);
+							throw new Error(nls.localize('connection.refreshAzureTokenFailure', "Failed to refresh Azure account token for connection"));
+						}
+						this._logService.debug(`Successfully refreshed token for connection ${connectionProfile.id} with uri ${uri}, result: ${connectionResult.connected} ${connectionResult.connectionProfile}, ${this._connectionStatusManager.getConnectionProfile(uri)}`);
+						return true;
+					} finally {
+						delete this._uriToReconnectPromiseMap[uri];
 					}
-					this._logService.info(`Successfully refreshed token for connection ${profile.id} with uri ${uri}, result: ${connectionResult.connected} ${connectionResult.connectionProfile}, isConnected: ${this.isConnected(uri)}, ${this._connectionStatusManager.getConnectionProfile(uri)}`);
-					return true;
-				} finally {
-					delete this._uriToReconnectPromiseMap[uri];
 				}
+				else {
+					this._logService.debug(`No need to refresh Azure acccount token for connection ${connectionProfile.id} with uri ${uri}`);
+				}
+			} else {
+				this._logService.warn(`Invalid expiry time ${expiry} for connection ${connectionProfile.id} with uri ${uri}`);
 			}
-			this._logService.info(`No need to refresh Azure acccount token for connection ${profile.id} with uri ${uri}`);
+			return true;
 		}
-		return true;
+		else
+			return false;
 	}
 
 	// Request Senders
@@ -1658,17 +1678,28 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 		return connections;
 	}
 
-	async handleUnsupportedProvider(providerName: string): Promise<boolean> {
-		const extensionId = ConnectionProviderAndExtensionMap.get(providerName);
+	public async handleUnsupportedProvider(providerId: string): Promise<boolean> {
+		const extensionId = ConnectionProviderAndExtensionMap.get(providerId);
 		const message = extensionId ? nls.localize('connection.extensionNotInstalled', "The extension '{0}' is required in order to connect to this resource. Do you want to install it?", extensionId) :
-			nls.localize('connectionDialog.connectionProviderNotSupported', "The extension that supports provider type '{0}' is not currently installed. Do you want to view the extensions?", providerName);
+			nls.localize('connectionDialog.connectionProviderNotSupported', "The extension that supports provider type '{0}' is not currently installed. Do you want to view the extensions?", providerId);
 		const result = await this._dialogService.confirm({
 			message: message,
 			type: 'question'
 		});
 		if (result.confirmed) {
 			if (extensionId) {
-				await this._commandService.executeCommand('extension.open', extensionId);
+				const providerRegistered = new Promise<void>(resolve => {
+					const eventHandler = this._capabilitiesService.onCapabilitiesRegistered(e => {
+						if (e.id === providerId) {
+							resolve();
+							eventHandler.dispose();
+						}
+					});
+				});
+				// Install the extension and then wait for the provider to be registered to ensure that everything is ready for the caller to use
+				await this._commandService.executeCommand('workbench.extensions.installExtension', extensionId);
+				await providerRegistered;
+
 			} else {
 				await this._paneCompositePartService.openPaneComposite(ExtensionsViewletID, ViewContainerLocation.Sidebar);
 			}

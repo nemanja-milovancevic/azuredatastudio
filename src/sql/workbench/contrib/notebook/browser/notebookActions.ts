@@ -17,7 +17,6 @@ import { ICapabilitiesService } from 'sql/platform/capabilities/common/capabilit
 import { ConnectionProfile } from 'sql/platform/connection/common/connectionProfile';
 import { IConnectionDialogService } from 'sql/workbench/services/connection/common/connectionDialogService';
 import { NotebookModel } from 'sql/workbench/services/notebook/browser/models/notebookModel';
-import { ICommandService } from 'vs/platform/commands/common/commands';
 import { CellType, NotebookChangeType } from 'sql/workbench/services/notebook/common/contracts';
 import { getErrorMessage } from 'vs/base/common/errors';
 import { IEditorAction } from 'vs/editor/common/editorCommon';
@@ -597,6 +596,9 @@ export class KernelsDropdown extends SelectBox {
 		this._register(this.model.kernelChanged((changedArgs: azdata.nb.IKernelChangedArgs) => {
 			this.updateKernel(changedArgs.newValue, changedArgs.nbKernelAlias);
 		}));
+		this._register(this.model.kernelsAdded(kernel => {
+			this.updateKernel(kernel);
+		}));
 		let kernel = this.model.clientSession && this.model.clientSession.kernel;
 		this.updateKernel(kernel);
 	}
@@ -836,13 +838,12 @@ export class NewNotebookAction extends Action {
 	public static readonly ID = 'notebook.command.new';
 	public static readonly LABEL = localize('newNotebookAction', "New Notebook");
 
-	public static readonly INTERNAL_NEW_NOTEBOOK_CMD_ID = '_notebook.command.new';
 	constructor(
 		id: string,
 		label: string,
-		@ICommandService private commandService: ICommandService,
 		@IObjectExplorerService private objectExplorerService: IObjectExplorerService,
 		@IAdsTelemetryService private _telemetryService: IAdsTelemetryService,
+		@INotebookService private _notebookService: INotebookService,
 	) {
 		super(id, label);
 		this.class = 'notebook-action new-notebook';
@@ -859,7 +860,7 @@ export class NewNotebookAction extends Action {
 		} else if (context && context.connectionProfile) {
 			connProfile = context.connectionProfile;
 		}
-		return this.commandService.executeCommand(NewNotebookAction.INTERNAL_NEW_NOTEBOOK_CMD_ID, { connectionProfile: connProfile });
+		await this._notebookService.openNotebook(URI.from({ scheme: 'untitled' }), { connectionProfile: connProfile });
 	}
 }
 

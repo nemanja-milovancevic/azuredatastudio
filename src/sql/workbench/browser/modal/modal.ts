@@ -21,7 +21,6 @@ import { IThemable } from 'vs/base/common/styler';
 import { isUndefinedOrNull } from 'vs/base/common/types';
 import { URI } from 'vs/base/common/uri';
 import { generateUuid } from 'vs/base/common/uuid';
-import { ITextResourcePropertiesService } from 'vs/editor/common/services/textResourceConfigurationService';
 import { localize } from 'vs/nls';
 import { IClipboardService } from 'vs/platform/clipboard/common/clipboardService';
 import { IContextKey, IContextKeyService, RawContextKey } from 'vs/platform/contextkey/common/contextkey';
@@ -30,6 +29,7 @@ import { ILogService } from 'vs/platform/log/common/log';
 import { attachButtonStyler } from 'vs/platform/theme/common/styler';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { Emitter } from 'vs/base/common/event';
+import { ITextResourcePropertiesService } from 'vs/editor/common/services/textResourceConfiguration';
 
 export enum MessageLevel {
 	Error = 0,
@@ -81,6 +81,7 @@ export interface IModalOptions {
 	hasErrors?: boolean;
 	hasSpinner?: boolean;
 	spinnerTitle?: string;
+	onSpinnerHideText?: string;
 	renderHeader?: boolean;
 	renderFooter?: boolean;
 	dialogProperties?: IDialogProperties;
@@ -94,7 +95,7 @@ const defaultOptions: IModalOptions = {
 	hasBackButton: false,
 	hasTitleIcon: false,
 	hasErrors: false,
-	hasSpinner: false,
+	hasSpinner: true,
 	renderHeader: true,
 	renderFooter: true,
 	dialogProperties: undefined
@@ -638,6 +639,9 @@ export abstract class Modal extends Disposable implements IThemable {
 				}
 			} else {
 				DOM.hide(this._spinnerElement!);
+				if (this._modalOptions.onSpinnerHideText) {
+					alert(this._modalOptions.onSpinnerHideText);
+				}
 			}
 		}
 	}

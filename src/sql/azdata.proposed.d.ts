@@ -8,6 +8,23 @@
 import * as vscode from 'vscode';
 
 declare module 'azdata' {
+
+	export namespace env {
+		/**
+		 * Well-known app quality values
+		 */
+		export enum AppQuality {
+			stable = 'stable',
+			insider = 'insider',
+			dev = 'dev'
+		}
+
+		/**
+		 * The version of Azure Data Studio this is currently running as - such as `stable`, or `insider`
+		 */
+		export const quality: AppQuality | string | undefined;
+	}
+
 	export namespace nb {
 		export interface NotebookDocument {
 			/**
@@ -28,25 +45,6 @@ declare module 'azdata' {
 			 * The list of languages that are supported for this kernel.
 			 */
 			supportedLanguages?: string[];
-			/**
-			 * The original name for this kernel.
-			 */
-			oldName?: string;
-			/**
-			 * The original display name for this kernel.
-			 */
-			oldDisplayName?: string;
-			/**
-			 * The original language name for this kernel.
-			 */
-			oldLanguage?: string;
-		}
-
-		export interface ILanguageInfo {
-			/**
-			 * The original name for this language.
-			 */
-			oldName?: string;
 		}
 
 		export interface IStandardKernel {
@@ -80,21 +78,9 @@ declare module 'azdata' {
 
 		export interface IExecuteRequest {
 			/**
-			 * URI of the notebook document that is sending this execute request.
-			 */
-			notebookUri: vscode.Uri;
-			/**
-			 * URI of the notebook cell that is sending this execute request.
-			 */
-			cellUri: vscode.Uri;
-			/**
 			 * The language of the notebook document that is executing this request.
 			 */
 			language: string;
-			/**
-			 * The index of the cell which the code being executed is from.
-			 */
-			cellIndex: number;
 		}
 
 		export interface INotebookMetadata {
@@ -146,6 +132,24 @@ declare module 'azdata' {
 			 */
 			restart(): Thenable<void>;
 		}
+	}
+
+	export interface LoadingComponentBase {
+		/**
+		* When true, the component will display a loading spinner.
+		*/
+		loading?: boolean;
+
+		/**
+		 * This sets the alert text which gets announced when the loading spinner is shown.
+		 */
+		loadingText?: string;
+
+		/**
+		 * The text to display while loading is set to false. Will also be announced through screen readers
+		 * once loading is completed.
+		 */
+		loadingCompletedText?: string;
 	}
 
 	/**
@@ -399,13 +403,46 @@ declare module 'azdata' {
 		title: string;
 	}
 
-	/*
-	 * Add optional azureAccount for connectionWidget.
-	 */
 	export interface IConnectionProfile extends ConnectionInfo {
+		/**
+		 * The type of authentication to use when connecting
+		 */
+		authenticationType: string | connection.AuthenticationType;
 		azureAccount?: string;
 		azureResourceId?: string;
 		azurePortalEndpoint?: string;
+	}
+
+	export namespace connection {
+		/**
+		 * Well-known Authentication types commonly supported by connection providers.
+		 */
+		export enum AuthenticationType {
+			/**
+			 * Username and password
+			 */
+			SqlLogin = 'SqlLogin',
+			/**
+			 * Windows Authentication
+			 */
+			Integrated = 'Integrated',
+			/**
+			 * Azure Active Directory - Universal with MFA support
+			 */
+			AzureMFA = 'AzureMFA',
+			/**
+			 * Azure Active Directory - Password
+			 */
+			AzureMFAAndUser = 'AzureMFAAndUser',
+			/**
+			 * Datacenter Security Token Service Authentication
+			 */
+			DSTSAuth = 'dstsAuth',
+			/**
+			 * No authentication required
+			 */
+			None = 'None'
+		}
 	}
 
 	/*
@@ -419,7 +456,29 @@ declare module 'azdata' {
 
 	export interface ConnectionOption {
 		defaultValueOsOverrides?: DefaultValueOsOverride[];
+
+		/**
+		 * When set to true, the respective connection option will be rendered on the main connection dialog
+		 * and not the Advanced Options window.
+		 */
+		showOnConnectionDialog?: boolean;
 	}
+
+	// Object Explorer interfaces  --------------------------------
+	export interface ObjectExplorerSession {
+		/**
+		 * Authentication token for the current session.
+		 */
+		securityToken?: accounts.AccountSecurityToken | undefined;
+	}
+
+	export interface ExpandNodeInfo {
+		/**
+		 * Authentication token for the current session.
+		 */
+		securityToken?: accounts.AccountSecurityToken | undefined;
+	}
+	// End Object Explorer interfaces  ----------------------------
 
 	export interface TaskInfo {
 		targetLocation?: string;
@@ -475,6 +534,13 @@ declare module 'azdata' {
 		payload?: IConnectionProfile;
 		childProvider?: string;
 		type?: ExtensionNodeType;
+	}
+
+	export interface AccountKey {
+		/**
+		 * Auth Library used to add the account
+		 */
+		authLibrary?: string;
 	}
 
 	export namespace workspace {
@@ -1279,6 +1345,10 @@ declare module 'azdata' {
 			 */
 			elapsedTimeInMs: number;
 			/**
+			 * CPU time taken by the node operation in milliseconds
+			 */
+			elapsedCpuTimeInMs: number;
+			/**
 			 * Node properties to be shown in the tooltip
 			 */
 			properties: ExecutionPlanGraphElementProperty[];
@@ -1318,6 +1388,21 @@ declare module 'azdata' {
 			 * Cost string for the node
 			 */
 			costDisplayString: string;
+			/**
+			 * Cost metrics for the node
+			 */
+			costMetrics: CostMetric[];
+		}
+
+		export interface CostMetric {
+			/**
+			 * Name of the cost metric.
+			 */
+			name: string;
+			/**
+			 * The value of the cost metric
+			 */
+			value: number | undefined;
 		}
 
 		export interface ExecutionPlanBadge {
@@ -1634,5 +1719,13 @@ declare module 'azdata' {
 		 * under the database, the nodeType is Folder, the objectType is be Tables.
 		 */
 		objectType?: string;
+	}
+
+	export namespace window {
+		export interface Wizard extends LoadingComponentBase {
+		}
+
+		export interface Dialog extends LoadingComponentBase {
+		}
 	}
 }

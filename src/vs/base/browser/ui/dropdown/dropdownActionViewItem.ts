@@ -88,6 +88,7 @@ export class DropdownMenuActionViewItem extends BaseActionViewItem {
 			this.element.setAttribute('aria-haspopup', 'true');
 			this.element.setAttribute('aria-expanded', 'false');
 			this.element.title = this._action.label || '';
+			this.element.ariaLabel = this._action.label || '';
 
 			return null;
 		};
@@ -178,16 +179,17 @@ export class ActionWithDropdownActionViewItem extends ActionViewItem {
 			const menuActionsProvider = {
 				getActions: () => {
 					const actionsProvider = (<IActionWithDropdownActionViewItemOptions>this.options).menuActionsOrProvider;
-					return [this._action, ...(Array.isArray(actionsProvider)
-						? actionsProvider
-						: (actionsProvider as IActionProvider).getActions()) // TODO: microsoft/TypeScript#42768
-					];
+					return Array.isArray(actionsProvider) ? actionsProvider : (actionsProvider as IActionProvider).getActions(); // TODO: microsoft/TypeScript#42768
 				}
 			};
 			this.dropdownMenuActionViewItem = new DropdownMenuActionViewItem(this._register(new Action('dropdownAction', undefined)), menuActionsProvider, this.contextMenuProvider, { classNames: ['dropdown', ...Codicon.dropDownButton.classNamesArray, ...(<IActionWithDropdownActionViewItemOptions>this.options).menuActionClassNames || []] });
 			this.dropdownMenuActionViewItem.render(this.element);
 
 			this._register(addDisposableListener(this.element, EventType.KEY_DOWN, e => {
+				// {{SQL CARBON EDIT}} If we don't have any items then the dropdown is hidden so don't try to focus it #20877
+				if (menuActionsProvider.getActions().length === 0) {
+					return;
+				}
 				const event = new StandardKeyboardEvent(e);
 				let handled: boolean = false;
 				if (this.dropdownMenuActionViewItem?.isFocused() && event.equals(KeyCode.LeftArrow)) {

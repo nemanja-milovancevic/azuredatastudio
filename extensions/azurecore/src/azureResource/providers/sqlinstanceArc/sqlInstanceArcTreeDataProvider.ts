@@ -3,12 +3,12 @@
  *  Licensed under the Source EULA. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExtensionNodeType, TreeItem } from 'azdata';
+import { ExtensionNodeType, TreeItem, connection } from 'azdata';
 import { TreeItemCollapsibleState, ExtensionContext } from 'vscode';
 import * as nls from 'vscode-nls';
 const localize = nls.loadMessageBundle();
 
-import { AzureResourceItemType } from '../../constants';
+import { AzureResourceItemType, mssqlProvider } from '../../constants';
 import { generateGuid } from '../../utils';
 import { IAzureResourceService } from '../../interfaces';
 import { ResourceTreeDataProviderBase } from '../resourceTreeDataProviderBase';
@@ -16,6 +16,7 @@ import { AzureAccount, azureResource } from 'azurecore';
 
 export class SqlInstanceArcTreeDataProvider extends ResourceTreeDataProviderBase<azureResource.AzureResourceDatabaseServer> {
 	private static readonly containerId = 'azure.resource.providers.sqlInstanceArcContainer';
+	// allow-any-unicode-next-line
 	private static readonly containerLabel = localize('azure.resource.providers.sqlInstanceArcContainerLabel', "SQL managed instance – Azure Arc");
 
 	public constructor(
@@ -43,11 +44,11 @@ export class SqlInstanceArcTreeDataProvider extends ResourceTreeDataProviderBase
 				databaseName: databaseServer.defaultDatabaseName,
 				userName: databaseServer.loginName,
 				password: '',
-				authenticationType: 'SqlLogin',
+				authenticationType: connection.AuthenticationType.SqlLogin,
 				savePassword: true,
 				groupFullName: '',
 				groupId: '',
-				providerName: 'MSSQL',
+				providerName: mssqlProvider,
 				saveProfile: false,
 				options: {},
 				azureAccount: account.key.accountId,
@@ -55,7 +56,7 @@ export class SqlInstanceArcTreeDataProvider extends ResourceTreeDataProviderBase
 				azureResourceId: databaseServer.id,
 				azurePortalEndpoint: account.properties.providerSettings.settings.portalEndpoint
 			},
-			childProvider: 'MSSQL',
+			childProvider: mssqlProvider,
 			type: ExtensionNodeType.Server
 		};
 	}

@@ -268,6 +268,9 @@ export interface IModelViewDialogDetails {
 	renderHeader: boolean;
 	renderFooter: boolean;
 	dialogProperties: IDialogProperties;
+	loading: boolean;
+	loadingText: string;
+	loadingCompletedText: string;
 }
 
 export interface IModelViewTabDetails {
@@ -307,6 +310,9 @@ export interface IModelViewWizardDetails {
 	message: DialogMessage;
 	displayPageTitles: boolean;
 	width: DialogWidth;
+	loading: boolean;
+	loadingText: string;
+	loadingCompletedText: string;
 }
 
 export type DialogWidth = 'narrow' | 'medium' | 'wide' | number | string;
@@ -561,12 +567,6 @@ export interface ICellMetadata {
 	tags?: string[] | undefined;
 	azdata_cell_guid?: string | undefined;
 	connection_name?: string;
-	/**
-	 * .NET Interactive metadata. This is only required for compatibility with the .NET Interactive extension.
-	 */
-	dotnet_interactive?: {
-		language: string;
-	}
 }
 
 export interface ISerializationManagerDetails {
@@ -1056,5 +1056,16 @@ export namespace executionPlan {
 		True = 2,
 		False = 3,
 		None = 4
+	}
+}
+
+export namespace env {
+	/**
+	 * Well-known app quality values
+	 */
+	export enum AppQuality {
+		stable = 'stable',
+		insider = 'insider',
+		dev = 'dev'
 	}
 }

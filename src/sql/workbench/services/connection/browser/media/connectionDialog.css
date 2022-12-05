@@ -111,6 +111,26 @@
 	font-weight: 600;
 }
 
+.custom-connection-options .connection-label .dialog-label-container,
+.vs-dark .custom-connection-options .connection-label .dialog-label-container,
+.hc-black .custom-connection-options .connection-label .dialog-label-container {
+	background-size: 9px;
+	background-repeat: no-repeat;
+	background-position: right;
+	padding-right: 18px;
+	float: left;
+}
+
+.dialog-label-container.info-icon,
+.vs .dialog-label-container.info-icon {
+	background-image: url("info.svg");
+}
+
+.vs-dark .dialog-label-container.info-icon,
+.hc-black .dialog-label-container.info-icon {
+	background-image: url("info_inverse.svg");
+}
+
 .hide-azure-accounts .azure-account-row {
 	display: none;
 }
@@ -120,6 +140,10 @@
 }
 
 .hide-password .password-row {
+	display: none;
+}
+
+.hide-customOptions .custom-connection-options {
 	display: none;
 }
 
