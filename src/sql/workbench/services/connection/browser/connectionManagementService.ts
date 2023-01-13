@@ -255,8 +255,10 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 	 * Load the password for the profile
 	 * @param connectionProfile Connection Profile
 	 */
-	public async addSavedPassword(connectionProfile: interfaces.IConnectionProfile): Promise<interfaces.IConnectionProfile> {
-		await this.fillInOrClearToken(connectionProfile);
+	public async addSavedPassword(connectionProfile: interfaces.IConnectionProfile, skipAccessToken: boolean = false): Promise<interfaces.IConnectionProfile> {
+		if (!skipAccessToken) {
+			await this.fillInOrClearToken(connectionProfile);
+		}
 		return this._connectionStore.addSavedPassword(connectionProfile).then(result => result.profile);
 	}
 
@@ -423,6 +425,14 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 				}
 			});
 		}
+	}
+
+	/**
+	 * Changes password of the connection profile's user.
+	 */
+	public changePassword(connection: interfaces.IConnectionProfile, uri: string, newPassword: string):
+		Promise<azdata.PasswordChangeResult> {
+		return this.sendChangePasswordRequest(connection, uri, newPassword);
 	}
 
 	/**
@@ -848,7 +858,8 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 			'pbidedicated.windows.net',
 			'pbidedicated.cloudapi.de',
 			'pbidedicated.usgovcloudapi.net',
-			'pbidedicated.chinacloudapi.cn'
+			'pbidedicated.chinacloudapi.cn',
+			'pbidedicated.windows-int.net'
 		];
 		let serverName = connection.serverName.toLowerCase();
 		return !!powerBiDomains.find(d => serverName.indexOf(d) >= 0);
@@ -864,6 +875,7 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 			&& connection.authenticationType !== Constants.AuthenticationType.AzureMFAAndUser
 			&& connection.authenticationType !== Constants.AuthenticationType.DSTSAuth) {
 			connection.options['azureAccountToken'] = undefined;
+			connection.options['expiresOn'] = undefined;
 			return true;
 		}
 
@@ -874,6 +886,7 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 			let dstsAccounts = accounts.filter(a => a.key.providerId.startsWith('dstsAuth'));
 			if (dstsAccounts.length <= 0) {
 				connection.options['azureAccountToken'] = undefined;
+				connection.options['expiresOn'] = undefined;
 				return false;
 			}
 
@@ -890,7 +903,9 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 		const azureAccounts = accounts.filter(a => a.key.providerId.startsWith('azure'));
 		if (azureAccounts && azureAccounts.length > 0) {
 			let accountId = (connection.authenticationType === Constants.AuthenticationType.AzureMFA || connection.authenticationType === Constants.AuthenticationType.AzureMFAAndUser) ? connection.azureAccount : connection.userName;
-			let account = azureAccounts.find(account => account.key.accountId === accountId);
+			// For backwards compatibility with ADAL, we need to check if the account ID matches with tenant Id or just the account ID
+			// The OR case can be removed once we no longer support ADAL
+			let account = azureAccounts.find(account => account.key.accountId === accountId || account.key.accountId.split('.')[0] === accountId);
 			if (account) {
 				this._logService.debug(`Getting security token for Azure account ${account.key.accountId}`);
 				if (account.isStale) {
@@ -1036,6 +1051,18 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 		});
 	}
 
+	private async sendChangePasswordRequest(connection: interfaces.IConnectionProfile, uri: string, newPassword: string): Promise<azdata.PasswordChangeResult> {
+		let connectionInfo = Object.assign({}, {
+			options: connection.options
+		});
+
+		return this._providers.get(connection.providerName).onReady.then((provider) => {
+			return provider.changePassword(uri, connectionInfo, newPassword).then(result => {
+				return result;
+			})
+		});
+	}
+
 	private sendCancelRequest(uri: string): Promise<boolean> {
 		let providerId: string = this.getProviderIdFromUri(uri);
 		if (!providerId) {
@@ -1128,7 +1155,7 @@ export class ConnectionManagementService extends Disposable implements IConnecti
 			}
 		} else {
 			connection.connectHandler(false, info.errorMessage, info.errorNumber, info.messages);
-			this._telemetryService.createErrorEvent(TelemetryKeys.TelemetryView.Shell, TelemetryKeys.TelemetryError.DatabaseConnectionError, info.errorNumber.toString())
+			this._telemetryService.createErrorEvent(TelemetryKeys.TelemetryView.Shell, TelemetryKeys.TelemetryError.DatabaseConnectionError, info.errorNumber?.toString())
 				.withConnectionInfo(connection.connectionProfile)
 				.withAdditionalMeasurements({
 					extensionConnectionTimeMs: connection.extensionTimer.elapsed() - connection.serviceTimer.elapsed(),
